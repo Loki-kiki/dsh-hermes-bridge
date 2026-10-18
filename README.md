@@ -237,9 +237,12 @@ dsh-hermes-bridge provider [--provider <name>] [--json]
   现在执行的是哪一份代码。
 - 版本比较是自己实现的（`<major>.<minor>.<patch>` + 预发布段），没有为了这个引
   semver 依赖。多一个运行依赖就多一份装不上的可能。
-- 用 `raw.githubusercontent.com` 而不是 GitHub API：API 匿名调用 60 次/小时/IP，
-  6 小时一次的检查迟早会撞上；raw 没有这个限制，拿到的就是仓库里的真实文件。
-  带 `ETag`，命中 304 时连传输都省了。
+- 用 GitHub API 而不是 `raw.githubusercontent.com`。raw 走 CDN，push 之后还会
+  发一会儿旧内容 —— 实测推送 0.3.1 后 raw 仍返回 0.3.0，而 `pnpm add github:...`
+  装到的是 0.3.1。**检查结果和实际装到的东西对不上，比不检查更糟**：面板上两个
+  数字永远不一致，用户没法判断到底更新成功没有。API 有 60 次/小时/IP 的限制，
+  6 小时一次是 4 次/天，够用；真撞上就记成「现在问不出来」，下次再试。
+- 带 `ETag`，命中 304 时连传输都省了。
 
 ### 先说一个坑：npm 上有同名的别人的包
 

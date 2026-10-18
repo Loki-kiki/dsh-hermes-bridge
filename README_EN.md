@@ -233,7 +233,7 @@ It reads `version` from the `package.json` in the repository and compares it wit
 
 - "Actually running" is *not* read from config — it resolves `package.json` upwards from the module's own location. The package may be `link:`ed to a working copy or installed into pnpm's virtual store; only the module knows which code is executing.
 - Version comparison is hand-written (`<major>.<minor>.<patch>` plus a prerelease segment) rather than pulling in `semver`. One more runtime dependency is one more thing that can fail to install.
-- It reads `raw.githubusercontent.com` instead of the GitHub API: the anonymous API is limited to 60 requests/hour/IP, which a 6-hourly check eventually hits; raw has no such limit and serves the real file from the repo. `ETag` is used, so a 304 costs no transfer.
+- It reads the GitHub API instead of `raw.githubusercontent.com`. raw is CDN-backed and keeps serving stale content for a while after a push — observed: raw still said 0.3.0 while `pnpm add github:...` installed 0.3.1. **A check that disagrees with what the install produced is worse than no check**: the two numbers on the panel never line up and the user cannot tell whether the update worked. The API allows 60 requests/hour/IP; a 6-hourly check uses 4/day, which is plenty, and hitting the limit is recorded as "cannot ask right now" rather than an error. `ETag` means a 304 costs no transfer.
 
 ### First, a trap: the npm package with this name is someone else's
 

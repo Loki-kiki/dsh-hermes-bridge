@@ -187,6 +187,45 @@ await check('a network failure is reported as an error string', async () => {
   assert.match(result.error, /ENOTFOUND/u)
 })
 
+await check('the check reads the API, not the CDN-fronted raw host', async () => {
+  // raw.githubusercontent.com keeps serving stale content after a push (observed:
+  // raw said 0.3.0 while `pnpm add github:...` installed 0.3.1). A check that
+  // disagrees with what the install actually produced is worse than no check, so
+  // the URL is part of the contract, not an implementation detail.
+  let seenUrl
+  await withFetch(
+    async (url) => {
+      seenUrl = String(url)
+      return new Response(JSON.stringify({ version: '1.0.0' }), { status: 200 })
+    },
+    () => updater.fetchRemoteVersion(baseConfig),
+  )
+  assert.ok(seenUrl.startsWith('https://api.github.com/repos/'), `must use the API: ${seenUrl}`)
+  assert.ok(seenUrl.includes('ref=main'), `must pin the branch: ${seenUrl}`)
+  assert.ok(!seenUrl.includes('raw.githubusercontent.com'), 'raw is CDN-cached and lags behind')
+  return seenUrl.replace('https://api.github.com/repos/', '')
+})
+
+await check('a rate-limited check says so instead of failing loudly', async () => {
+  const result = await withFetch(
+    async () => new Response('{"message":"API rate limit exceeded"}', { status: 403 }),
+    () => updater.fetchRemoteVersion(baseConfig),
+  )
+  assert.equal(result.ok, false)
+  assert.match(result.error, /rate limit/u)
+  return 'rate limit is a soft state'
+})
+
+await check('a wrong repo or branch names the cause', async () => {
+  const result = await withFetch(
+    async () => new Response('{"message":"Not Found"}', { status: 404 }),
+    () => updater.fetchRemoteVersion(baseConfig),
+  )
+  assert.equal(result.ok, false)
+  assert.match(result.error, /not found/u)
+  assert.match(result.error, /branch/u)
+})
+
 await check('the etag is sent back as if-none-match', async () => {
   let seen
   await withFetch(
