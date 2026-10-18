@@ -54,6 +54,7 @@ window.__ModuleLoader__.load({
         'row.skills': '技能库',
         'row.viking': 'OpenViking',
         'row.provider': '记忆提供方（通用）',
+        'row.updater': '自动更新',
         'row.mcp': 'MCP 服务器',
         'row.hermes-data': 'Hermes 数据',
         'row.persona.desc': 'SOUL.md 作为系统提示词段注入，每次请求都在上下文里。',
@@ -62,6 +63,7 @@ window.__ModuleLoader__.load({
         'row.skills.desc': '把 Hermes 的分类嵌套技能库注册成 DSH 自己的 skill provider。',
         'row.viking.desc': 'OpenViking 知识库的四个工具，按需检索，不占空转 token。',
         'row.provider.desc': '不写死任何一家：接 Hermes 当前配置的记忆提供方（openviking / retaindb / byterover / honcho / mem0 …），Hermes 以后新增的也自动可用。默认关闭。',
+        'row.updater.desc': '定期问 GitHub 上有没有新版本，可选自动安装；装完优先用 DSH 的 HMR 热重载，不行就如实告诉你需要重启。',
         'row.mcp.desc': 'Hermes 的 MCP 服务器，每个服务器一条独立行。',
         'row.hermes-data.desc': '只读：Hermes 的 cron 任务清单 + 会话历史全文检索。',
         'row.on': '已启用',
@@ -166,6 +168,29 @@ window.__ModuleLoader__.load({
         vikingIdentity: 'OpenViking 身份',
         vikingIdentityHint: 'user 是 OpenViking 里的租户名，和 Hermes 侧 config.yaml 的 memory.openviking.user 保持一致才能查到同一批记忆。',
 
+        updateTitle: '插件更新',
+        updateHint: '这一份插件可以自己检查有没有新版本。检查只读一个 JSON；安装会跑 pnpm（和插件页点安装是同一个包管理器），装完尝试热重载。',
+        updateCurrent: '当前版本',
+        updateRemote: '远端版本',
+        updateLatest: '已是最新',
+        updateAvailable: '有新版本 {v}',
+        updateUnknown: '还没检查过',
+        updateCheck: '检查更新',
+        updateChecking: '检查中…',
+        updateInstall: '安装 {v}',
+        updateInstalling: '安装中…',
+        updateCheckedAt: '检查于',
+        updateInterval: '每 {n} 小时自动检查',
+        updateAutoCheck: '自动检查',
+        updateAutoInstall: '自动安装',
+        updateAutoInstallHint: '装新代码等于换掉正在跑的模块，建议手动点。',
+        updateRepo: '版本来源',
+        updateReloadApplied: '已热重载，新的代码正在跑。',
+        updateReloadRestart: '已装好，但这次需要重启 DSH 才生效：{reason}',
+        updateFailed: '安装失败',
+        updateRowMissing: '更新器这一行没挂载（在插件页打开「自动更新」）。',
+        updateLinkInstall: '这一份是 link: 到工作副本的，用 git 更新它，pnpm 管不了。',
+
         providerTitle: '记忆提供方（通用）',
         providerHint: '这行不写死任何一家：它去问 Hermes 当前用的是哪个记忆后端，把那个后端的工具原样接进来。所以 openviking / retaindb / byterover，以及从插件目录装的 honcho / mem0 / hindsight / supermemory，都不用改代码就能用。',
         providerInHermes: 'Hermes 当前 provider',
@@ -201,6 +226,7 @@ window.__ModuleLoader__.load({
         'row.skills': 'Skill library',
         'row.viking': 'OpenViking',
         'row.provider': 'Memory provider (generic)',
+        'row.updater': 'Auto-update',
         'row.mcp': 'MCP servers',
         'row.hermes-data': 'Hermes data',
         'row.persona.desc': 'SOUL.md as a system prompt section, present on every request.',
@@ -209,6 +235,7 @@ window.__ModuleLoader__.load({
         'row.skills.desc': 'Registers the category-nested Hermes skill tree as a real DSH skill provider.',
         'row.viking.desc': 'Four tools over the OpenViking knowledge base, retrieved on demand.',
         'row.provider.desc': 'No provider hardcoded: mounts whatever memory backend Hermes is configured to use (openviking / retaindb / byterover / honcho / mem0 …), including ones Hermes gains later. Ships disabled.',
+        'row.updater.desc': 'Asks GitHub periodically whether a newer version exists, optionally installs it, then hot-reloads through DSH HMR — and says so plainly when a restart is needed instead.',
         'row.mcp.desc': 'Hermes MCP servers, one independent row each.',
         'row.hermes-data.desc': 'Read-only: Hermes cron job list plus full-text search over its session history.',
         'row.on': 'Enabled',
@@ -306,6 +333,29 @@ window.__ModuleLoader__.load({
         mcpNoServers: '(no MCP servers in the Hermes config)',
         vikingIdentity: 'OpenViking identity',
         vikingIdentityHint: 'user is the OpenViking tenant name; keep it equal to memory.openviking.user in Hermes\' config.yaml so both sides query the same memories.',
+
+        updateTitle: 'Plugin updates',
+        updateHint: 'This copy can check for a newer version itself. Checking reads one JSON; installing runs pnpm (the same package manager the Plugins page uses) and then tries a hot reload.',
+        updateCurrent: 'Running',
+        updateRemote: 'Remote',
+        updateLatest: 'Up to date',
+        updateAvailable: 'Version {v} is available',
+        updateUnknown: 'Not checked yet',
+        updateCheck: 'Check for updates',
+        updateChecking: 'Checking…',
+        updateInstall: 'Install {v}',
+        updateInstalling: 'Installing…',
+        updateCheckedAt: 'Checked',
+        updateInterval: 'Auto-checks every {n}h',
+        updateAutoCheck: 'Auto-check',
+        updateAutoInstall: 'Auto-install',
+        updateAutoInstallHint: 'Installing replaces the modules that are running; better left manual.',
+        updateRepo: 'Version source',
+        updateReloadApplied: 'Hot-reloaded — the new code is running now.',
+        updateReloadRestart: 'Installed, but this one needs a DSH restart: {reason}',
+        updateFailed: 'Install failed',
+        updateRowMissing: 'The updater row is not mounted (enable "Auto-update" on the Plugins page).',
+        updateLinkInstall: 'This copy is a link: to a working directory; update it with git — pnpm cannot.',
 
         providerTitle: 'Memory provider (generic)',
         providerHint: 'Nothing hardcoded here: the row asks Hermes which memory backend it is configured to use and mounts that backend own tools. So openviking / retaindb / byterover — and catalog-installed honcho / mem0 / hindsight / supermemory — all work with no code change.',
@@ -586,6 +636,7 @@ window.__ModuleLoader__.load({
       { id: 'hermes-bridge-skills', key: 'skills' },
       { id: 'hermes-bridge-viking', key: 'viking' },
       { id: 'hermes-bridge-provider', key: 'provider' },
+      { id: 'hermes-bridge-updater', key: 'updater' },
       { id: 'hermes-bridge-mcp', key: 'mcp' },
       { id: 'hermes-bridge-hermes-data', key: 'hermes-data' },
     ]
@@ -801,6 +852,121 @@ window.__ModuleLoader__.load({
           }, block.text === '' ? t('empty') : block.text))))
     }
 
+    // ── update section (the updater row's control surface) ────────────────────
+    /**
+     * 插件更新面板。
+     *
+     * 三件事分开说，因为它们失败的后果完全不同：
+     *   1. **检查**只读一个 JSON，失败 = 现在不知道，页面照常；
+     *   2. **安装**会真的替换正在跑的模块，所以结果要分「装上了」和「生效了」两段；
+     *   3. **热重载没成功**时必须明说要重启 —— 这一条是最容易被含糊掉的，
+     *      含糊掉的结果是用户以为已经更新、实际还在跑旧代码。
+     *
+     * 组件自己持有状态，因为它会主动触发后端动作（检查/安装），而页面其余部分
+     * 只读 /status。
+     */
+    function UpdateSection({ t }) {
+      const [state, setState] = useState(undefined)
+      const [busy, setBusy] = useState('')
+      const [error, setError] = useState('')
+
+      const load = useCallback(async () => {
+        try {
+          setState(await api('/update'))
+        } catch (failure) {
+          setError(failure?.message ?? String(failure))
+        }
+      }, [])
+
+      useEffect(() => { load() }, [load])
+
+      const run = useCallback(async (kind) => {
+        setBusy(kind)
+        setError('')
+        try {
+          const next = await api(kind === 'check' ? '/update/check' : '/update/install', {
+            method: 'POST',
+            // 安装要跑 pnpm，可能几十秒；检查最坏等一次网络超时。
+            timeout: kind === 'check' ? 45000 : 240000,
+            ...(kind === 'install' ? { body: JSON.stringify({}) } : {}),
+          })
+          setState(next)
+        } catch (failure) {
+          setError(failure?.message ?? String(failure))
+        } finally {
+          setBusy('')
+        }
+      }, [])
+
+      if (state === undefined) {
+        return h(Section, { title: t('updateTitle') },
+          h(Panel, null, h('div', { className: 'hb_fieldhint' }, error === '' ? t('loading') : error)))
+      }
+
+      if (state.available === false) {
+        return h(Section, { title: t('updateTitle'), hint: t('updateHint') },
+          h('div', { className: 'hb_callout' }, t('updateRowMissing')))
+      }
+
+      const install = state.lastInstall
+      const reloadTone = install === undefined ? undefined : (install.ok && install.reload?.applied ? 'ok' : 'warn')
+
+      return h(Section, { title: t('updateTitle'), hint: t('updateHint') },
+        error === '' ? null : h('div', { className: 'hb_callout error' }, error),
+        state.error !== '' && state.error !== undefined
+          ? h('div', { className: 'hb_callout' }, `${t('updateFailed')}: ${state.error}`)
+          : null,
+        h(Panel, null,
+          h('dl', { className: 'hb_kv' },
+            h('dt', null, t('updateCurrent')),
+            h('dd', { className: 'hb_mono' }, state.currentVersion ?? ''),
+            h('dt', null, t('updateRemote')),
+            h('dd', null,
+              state.remoteVersion === '' || state.remoteVersion === undefined
+                ? h('span', { className: 'hb_fieldhint' }, t('updateUnknown'))
+                : h('span', { className: 'hb_mono' }, state.remoteVersion),
+              state.updateAvailable
+                ? h(Pill, { tone: 'warn', strong: true }, t('updateAvailable').replace('{v}', String(state.remoteVersion)))
+                : (state.remoteVersion === '' ? null : h(Pill, { tone: 'ok' }, t('updateLatest')))),
+            h('dt', null, t('updateRepo')),
+            h('dd', { className: 'hb_mono' }, `${state.repo ?? ''}@${state.branch ?? ''}`),
+            h('dt', null, t('updateInterval')),
+            h('dd', null,
+              h(Pill, { tone: state.autoCheck ? 'ok' : undefined }, t('updateAutoCheck')),
+              ' ',
+              h(Pill, { tone: state.autoInstall ? 'warn' : undefined }, t('updateAutoInstall')),
+              state.autoInstall ? null : h('span', { className: 'hb_fieldhint' }, ` ${t('updateAutoInstallHint')}`))),
+          h('div', { className: 'hb_toolbar' },
+            h('button', {
+              className: 'hb_btn',
+              disabled: busy !== '',
+              onClick: () => run('check'),
+            }, busy === 'check' ? t('updateChecking') : t('updateCheck')),
+            state.updateAvailable
+              ? h('button', {
+                className: 'hb_btn',
+                disabled: busy !== '',
+                onClick: () => run('install'),
+              }, busy === 'install' ? t('updateInstalling') : t('updateInstall').replace('{v}', String(state.remoteVersion)))
+              : null,
+            state.checkedAt > 0
+              ? h('span', { className: 'hb_fieldhint' }, `${t('updateCheckedAt')} ${new Date(state.checkedAt).toLocaleString()}`)
+              : null),
+          install === undefined
+            ? null
+            : h('div', { className: `hb_callout${install.ok && install.reload?.applied ? '' : ' warn'}`, style: { marginTop: '10px' } },
+              h('div', null,
+                h(Pill, { tone: reloadTone }, `${install.from ?? '?'} → ${install.target ?? '?'}`),
+                ' ',
+                install.ok
+                  ? (install.reload?.applied ? t('updateReloadApplied') : t('updateReloadRestart').replace('{reason}', String(install.reload?.reason ?? 'unknown')))
+                  : `${t('updateFailed')}: ${install.error ?? ''}`),
+              install.ok ? null : h('div', { className: 'hb_fieldhint', style: { marginTop: '6px' } }, t('updateLinkInstall')),
+              install.stderr !== undefined && install.stderr !== '' && install.ok === false
+                ? h('pre', { className: 'hb_previewbody', style: { marginTop: '8px' } }, String(install.stderr).slice(-1200))
+                : null)))
+    }
+
     // ── provider section (the generic memory-backend row) ─────────────────────
     /**
      * The generic provider row's control surface.
@@ -983,6 +1149,8 @@ window.__ModuleLoader__.load({
                     setNotice(failure?.message ?? String(failure))
                   } finally { setBusy('') }
                 } }, busy === 'identity' ? t('saving') : t('save')))))),
+
+        h(UpdateSection, { t }),
 
         h(ProviderSection, { t, data, onSaved, notice, setNotice }),
 

@@ -56,6 +56,7 @@
 | `hermes-bridge-skills` | `dsh-hermes-bridge/skills` | recursively discovers Hermes' `skills/` and registers a `ctx.skills` provider | on demand |
 | `hermes-bridge-viking` | `dsh-hermes-bridge/viking` | four OpenViking tools (search / read / browse / remember), hand-written HTTP client | on demand |
 | `hermes-bridge-provider` | `dsh-hermes-bridge/provider` | **generic**: mounts whatever memory backend Hermes is configured to use (openviking / retaindb / byterover / honcho / mem0 / hindsight / supermemory …) | on demand |
+| `hermes-bridge-updater` | `dsh-hermes-bridge/updater` | checks GitHub for a newer version on a schedule, optionally installs it, then tries a hot reload | — |
 | `hermes-bridge-mcp` | `dsh-hermes-bridge/mcp` | reconciles Hermes' MCP servers with the rows already mounted and reports drift | row level |
 | `hermes-bridge-hermes-data` | `dsh-hermes-bridge/hermes-data` | Hermes' cron list + session history search (**read-only**) | on demand |
 | `hermes-bridge-settings` | `dsh-hermes-bridge/settings` | data backend for the settings page (not a feature) | — |
@@ -96,8 +97,8 @@ Five tabs:
 
 | Tab | Contents |
 |---|---|
-| Overview | switches for the eight feature rows, memory origin distribution, every file the bridge actually reads (real size + mtime), Hermes-side memory settings, live OpenViking health |
-| Connection | the first-run guide: Hermes probe, path input/test/save, OpenViking endpoint and identity, **memory-provider panel** (backend / agent tree / interpreter / one-click tool probe), one-click MCP sync |
+| Overview | switches for the nine feature rows, memory origin distribution, every file the bridge actually reads (real size + mtime), Hermes-side memory settings, live OpenViking health |
+| Connection | the first-run guide: Hermes probe, path input/test/save, OpenViking endpoint and identity, **plugin-update panel**, **memory-provider panel** (backend / agent tree / interpreter / one-click tool probe), one-click MCP sync |
 | Skills | per-skill switches with search, category filter and bulk toggle — effective on the next conversation |
 | Preview | the persona and memory sections **as actually injected**, rendered from the files rather than guessed from config |
 | Diagnostics | profile, both homes, overlay path, skill state file — each one copyable in a click |
@@ -222,6 +223,64 @@ Any of the three:
 
 Do not disable `hermes-bridge-host`, and do not move features into it: DSH binds the browser half to the row whose **specifier is the bare package name** (`exactPackageSpecifier()` returns `undefined` for subpaths), so without it the settings UI silently disappears — and any feature you mount on that row can never be switched off again.
 
+## Updating itself (`updater` row)
+
+This package asks GitHub whether a newer version exists, and installs it into the current profile when you click the button.
+
+### How it decides there is a new version
+
+It reads `version` from the `package.json` in the repository and compares it with **the copy that is actually running**:
+
+- "Actually running" is *not* read from config — it resolves `package.json` upwards from the module's own location. The package may be `link:`ed to a working copy or installed into pnpm's virtual store; only the module knows which code is executing.
+- Version comparison is hand-written (`<major>.<minor>.<patch>` plus a prerelease segment) rather than pulling in `semver`. One more runtime dependency is one more thing that can fail to install.
+- It reads `raw.githubusercontent.com` instead of the GitHub API: the anonymous API is limited to 60 requests/hour/IP, which a 6-hourly check eventually hits; raw has no such limit and serves the real file from the repo. `ETag` is used, so a 304 costs no transfer.
+
+### How it installs
+
+Through pnpm — the same package manager the Plugins page uses. It does not download and overwrite files, so "updated" and "freshly installed" end up byte-identical instead of being two different things that cannot reproduce each other's bugs.
+
+What it installs depends on **how your copy was installed**:
+
+| Your dependency | Behaviour |
+|---|---|
+| `^0.2.0` (npm / registry) | `pnpm add <name>@<new version>` |
+| `github:...` / `git+...` | reinstalls from the same source, picking up the latest commit |
+| `link:E:/...` (a working copy) | **leaves it alone** and tells you to update that directory with git |
+
+That last row is deliberate: running `pnpm add name@version` on a `link:` dependency replaces the link with a registry copy — silently destroying a developer's edit loop while looking like a successful update.
+
+### "Installed" and "in effect" are different answers
+
+After installing it asks DSH's own HMR to replace the modules live. Three outcomes, reported separately:
+
+```
+Hot-reloaded — the new code is running now.          ← best case
+Installed, but this one needs a DSH restart: <why>    ← common
+Install failed: <pnpm's real error>                   ← sometimes
+```
+
+**Why they must not be merged**: HMR depends on the ESM module cache, which a packed worker does not keep; there it can only return `restart-required`. Reporting that as "updated" means every later "I'm on the latest version" judgement is wrong, with no way to notice.
+
+### A failed check is not an error
+
+GitHub is often slow or unreachable from mainland China. Checking is bounded by a timeout, cached, and a failure is recorded as "currently unknown" — the page keeps working instead of showing a spinner that never resolves.
+
+### Configuration
+
+```yaml
+- id: hermes-bridge-updater
+  name: dsh-hermes-bridge/updater
+  config:
+    repo: Loki-kiki/dsh-hermes-bridge   # point at your fork as owner/name
+    branch: main
+    intervalHours: 6                    # minimum 1 minute
+    autoCheck: true                     # reads one JSON
+    autoInstall: false                  # installing replaces running code; leave it to a human
+    timeoutMs: 20000
+```
+
+`autoInstall: true` is for unattended setups. Day to day, `false` is safer: an automatic install that lands while you are waiting on a long answer swaps the code out mid-flight.
+
 ## The generic memory provider (`provider` row)
 
 The `viking` row is a hand-written OpenViking client — one backend, by design. Hermes has far more: `retaindb` and `byterover` ship in-tree, and the plugin catalog carries dozens more (honcho, mem0, hindsight, supermemory, lancedb, cognee…), with new ones arriving regularly.
@@ -289,6 +348,9 @@ OpenViking only really participates when Hermes has `memory.provider: openviking
 
 ## Design notes
 
+- **Why auto-install ships off**: updating replaces modules that are currently running. Default-on would mean code being swapped out at some moment when you are waiting for an answer. Checking is read-only, so it ships on.
+- **Why updates go through pnpm rather than a download**: two install paths produce two artefacts. Updating and first-installing must share one path, otherwise "people who updated" and "people who just installed" run different things and cannot reproduce each other's bugs.
+- **Why a failed hot reload is stated plainly**: HMR needs the ESM module cache, which a packed worker does not keep; there it can only return `restart-required`. Calling that "updated" makes every later "I'm current" judgement wrong, invisibly.
 - **Why the memory provider is not re-implemented per backend**: Hermes' providers share one Python contract (`get_tool_schemas()` + `handle_tool_call()`), with three in-tree and dozens more in the catalog, still growing. Writing a JS client per backend never catches up, and an endpoint change turns into a tool that silently answers from the wrong route. Letting Hermes' own loader act as the adapter makes new backends work with no bridge change. The cost is one Python child process: started lazily, killed on timeout, shut down when the row unloads.
 - **The worker's stdout *is* the protocol**: `provider_bridge.py` dups fd 1 away and then points fd 1 at fd 2. Otherwise any `print` inside a provider (or a native library it loads) corrupts the protocol, which surfaces as "one call failed, the retry worked".
 
@@ -338,6 +400,7 @@ node test/memory-store.mjs   # memory files (CRLF / concurrency / origin tags / 
 node test/schema.mjs         # DSL -> JSON Schema conversion
 node test/settings.mjs       # settings backend: config writes, probing, row switches, skill list
 node test/provider.mjs       # the generic provider row (9 offline; --live adds 11 against a real backend)
+node test/updater.mjs        # the updater (version compare / config / network failure / encoding / link: protection)
 node test/client-render.mjs  # loads client.js the way the host does and renders every tab
 
 # these read real Hermes data, skipped by default:

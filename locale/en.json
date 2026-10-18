@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Hermes Bridge",
-    "description": "Brings Hermes's persona, long-term memory, skill library, MCP servers, OpenViking and any memory provider into DeepSeek Harness — every capability is its own switchable row."
+    "description": "Brings Hermes's persona, long-term memory, skill library, MCP servers, OpenViking and any memory provider into DeepSeek Harness — and updates itself on a schedule. Every capability is its own switchable row."
   }
 }

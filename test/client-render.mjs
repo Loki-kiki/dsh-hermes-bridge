@@ -149,6 +149,7 @@ const status = {
     { id: 'hermes-bridge-skills', enabled: true, overridden: false },
     { id: 'hermes-bridge-viking', enabled: true, overridden: false },
     { id: 'hermes-bridge-provider', enabled: false, overridden: false },
+    { id: 'hermes-bridge-updater', enabled: true, overridden: false },
     { id: 'hermes-bridge-mcp', enabled: true, overridden: false },
     { id: 'hermes-bridge-hermes-data', enabled: true, overridden: false },
   ],
@@ -284,7 +285,7 @@ function renderPage(tab, t) {
 
 const TAB_CASES = [
   ['overview', ['记忆提供方（通用）', 'OpenViking', 'MCP 服务器']],
-  ['connection', ['记忆提供方（通用）', 'Hermes 当前 provider', '探测这个 provider']],
+  ['connection', ['记忆提供方（通用）', 'Hermes 当前 provider', '探测这个 provider', '插件更新']],
   ['skills', ['技能库']],
   ['preview', ['提示词预览']],
   ['diagnostics', ['诊断']],
@@ -346,6 +347,32 @@ check('a missing agent tree is shown as missing, not as an empty cell', () => {
   const html = render(SettingsPage({ t: zh, locale: 'zh' }), zh)
   assert.ok(html.includes('缺'), 'a missing path must be labelled')
   return 'labelled'
+})
+
+check('the update panel is on the connection tab', () => {
+  const html = renderPage('connection', zh)
+  assert.ok(html.includes('插件更新'), 'the panel title must be visible')
+  assert.ok(html.includes('检查更新') || html.includes('正在读取桥接状态'), 'the check button must be reachable')
+  return 'panel present'
+})
+
+check('the update panel explains a missing updater row instead of showing blanks', () => {
+  // The panel fetches `/update` itself, so with a stub fetch it cannot resolve
+  // here. What must hold is that its copy exists in both languages and that a
+  // missing row has a sentence to show — a blank panel is the failure mode this
+  // guards against.
+  for (const t of [zh, en]) {
+    assert.ok(t('updateRowMissing').length > 20, 'must tell the user which row to enable')
+    assert.ok(t('updateReloadRestart').includes('{reason}'), 'the restart branch needs a reason slot')
+    assert.ok(t('updateInstall').includes('{v}'), 'the install button names the version')
+  }
+  return 'copy complete'
+})
+
+check('the updater row is listed in the overview with a label', () => {
+  const html = renderPage('overview', zh)
+  assert.ok(html.includes('自动更新'), 'the row label must appear in the row list')
+  return 'row labelled'
 })
 
 check('the provider row appears in the overview with its switch', () => {

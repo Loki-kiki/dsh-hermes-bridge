@@ -125,6 +125,23 @@
         enablePrompt: true
         order: 7
 
+    # 本插件自己的更新器：定期问 GitHub 上有没有新版本，可选自动安装。
+    # 更新走 pnpm（和插件页点安装同一个包管理器），装完优先用 DSH 的 HMR
+    # 热重载；HMR 不可用时如实报「需要重启」，不会假装已生效。
+    - id: hermes-bridge-updater
+      name: dsh-hermes-bridge/updater
+      config:
+        # 版本来源。换成自己的 fork 就填 owner/name。
+        repo: Loki-kiki/dsh-hermes-bridge
+        branch: main
+        # 多久检查一次（小时）。最小 1 分钟，防止写错成 0 之后狂打 GitHub。
+        intervalHours: 6
+        # 只读一个 JSON，默认开着。
+        autoCheck: true
+        # 自动安装默认关：装新代码等于换掉正在跑的模块，该由人拍板。
+        autoInstall: false
+        timeoutMs: 20000
+
     # Hermes 自己的运行时数据，只读。
     # cron 任务和会话历史都活在 Hermes 里，DSH 自带的 schedule/session_search
     # 看不到它们 —— 没有这行，「我那些定时任务还活着吗」就得切回 Hermes 才能答。

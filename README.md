@@ -54,6 +54,7 @@
 | `hermes-bridge-skills` | `dsh-hermes-bridge/skills` | 递归发现 Hermes 的 `skills/`，注册成 `ctx.skills` provider | 按需加载 |
 | `hermes-bridge-viking` | `dsh-hermes-bridge/viking` | OpenViking 的 4 个工具（search / read / browse / remember），手写 HTTP 客户端 | 按需检索 |
 | `hermes-bridge-provider` | `dsh-hermes-bridge/provider` | **通用**：把 Hermes 当前配置的记忆提供方原样接进来（openviking / retaindb / byterover / honcho / mem0 / hindsight / supermemory …） | 按需检索 |
+| `hermes-bridge-updater` | `dsh-hermes-bridge/updater` | 定期检查 GitHub 上有没有新版本，可选自动安装，装完尝试热重载 | — |
 | `hermes-bridge-mcp` | `dsh-hermes-bridge/mcp` | 对账 Hermes 的 MCP 服务器与已挂载行，提示漂移 | 行级 |
 | `hermes-bridge-hermes-data` | `dsh-hermes-bridge/hermes-data` | Hermes 的 cron 清单 + 会话历史检索（**只读**） | 按需调用 |
 | `hermes-bridge-settings` | `dsh-hermes-bridge/settings` | 设置页的数据接口（不是功能） | — |
@@ -97,8 +98,8 @@ dsh plugin --profile <profile> add <本仓库绝对路径>
 
 | 页签 | 内容 |
 |---|---|
-| 总览 | 八个功能行的开关、记忆来源分布、桥接实际读取的每个文件（真实大小 + 修改时间）、Hermes 侧记忆设置、OpenViking 实时健康 |
-| 连接 | 首次安装引导：Hermes 探测、路径输入/测试/保存、OpenViking 端点与身份、**记忆提供方面板**（当前后端 / agent 树 / 解释器 / 一键探测工具清单）、一键 MCP 同步 |
+| 总览 | 九个功能行的开关、记忆来源分布、桥接实际读取的每个文件（真实大小 + 修改时间）、Hermes 侧记忆设置、OpenViking 实时健康 |
+| 连接 | 首次安装引导：Hermes 探测、路径输入/测试/保存、OpenViking 端点与身份、**插件更新面板**、**记忆提供方面板**（当前后端 / agent 树 / 解释器 / 一键探测工具清单）、一键 MCP 同步 |
 | 技能 | 技能清单逐个开关 + 搜索 + 分类筛选 + 批量全开全关，下一次对话生效 |
 | 预览 | 人设段和记忆段**实际注入**的原文（直接读文件渲染，不是从配置反推） |
 | 诊断 | profile、Hermes 主目录、DSH 主目录、覆盖层路径、技能状态文件，每项可一键复制 |
@@ -223,6 +224,84 @@ dsh-hermes-bridge provider [--provider <name>] [--json]
 
 注意 `hermes-bridge-host` 不要关也不要往里搬功能：DSH 把浏览器半身绑在 **specifier 是裸包名** 的那一行上（`exactPackageSpecifier()` 对子路径返回 `undefined`），没有它设置界面会静默消失；而一旦往那行挂功能，那个功能就再也关不掉了。
 
+## 自动更新（`updater` 行）
+
+这一份插件会定期问 GitHub 上有没有新版本，并在你点一下之后把它装进当前 profile。
+
+### 它怎么判断「有没有新版」
+
+读仓库里那份 `package.json` 的 `version`，和**正在跑的那份**比：
+
+- 「正在跑的那份」不是从配置里读的，而是从模块自己的位置往上找 `package.json` ——
+  插件可能被 `link:` 到工作副本、也可能被 pnpm 装进虚拟 store，只有模块自己知道
+  现在执行的是哪一份代码。
+- 版本比较是自己实现的（`<major>.<minor>.<patch>` + 预发布段），没有为了这个引
+  semver 依赖。多一个运行依赖就多一份装不上的可能。
+- 用 `raw.githubusercontent.com` 而不是 GitHub API：API 匿名调用 60 次/小时/IP，
+  6 小时一次的检查迟早会撞上；raw 没有这个限制，拿到的就是仓库里的真实文件。
+  带 `ETag`，命中 304 时连传输都省了。
+
+### 它怎么装
+
+走 pnpm，和你在插件页点「安装」用的是同一个包管理器 —— 不是自己下载文件覆盖，
+所以「更新」和「首次安装」的结果形态完全一致，不会出现两种安装方式产物不同的局面。
+
+装什么，取决于**你这份是怎么装的**：
+
+| 你现在这份 | 更新行为 |
+|---|---|
+| `^0.2.0`（从 npm / registry） | `pnpm add <name>@<新版>` |
+| `github:...` / `git+...` | 按同一来源重装，拉到最新提交 |
+| `link:E:/...`（指向工作副本） | **不动它**，并明确告诉你「用 git 更新那个目录」 |
+
+最后一条是刻意的：对 `link:` 依赖跑 `pnpm add name@version` 会把链接替换成 registry
+里的一份副本 —— 那等于悄悄毁掉开发者的工作回路，而它看起来还「更新成功」了。
+
+### 「装好了」和「生效了」是两件事
+
+装完会尝试用 DSH 自带的 HMR 现场重载模块。三种结果是分开报的：
+
+```
+已热重载，新的代码正在跑。                              ← 最好
+已装好，但这次需要重启 DSH 才生效：<原因>                 ← 常见
+安装失败：<pnpm 的真实报错>                              ← 有时
+```
+
+**为什么必须分开报**：HMR 依赖 ESM 模块缓存，打包过的 worker 里没有这个缓存，
+这时它只能返回 `restart-required`。把这种情况说成「已更新」，用户就会以为新代码
+在跑，实际还在跑旧的 —— 之后所有基于「我已经是最新版」的判断都会是错的。
+
+### 检查失败不是错误
+
+GitHub 在国内经常慢或不通。检查有超时、有缓存、失败只记成「现在不知道」，页面
+照常工作，不会因此变成一个红框或者转不出来的加载态。
+
+### 配置
+
+```yaml
+- id: hermes-bridge-updater
+  name: dsh-hermes-bridge/updater
+  config:
+    repo: Loki-kiki/dsh-hermes-bridge   # 换成自己的 fork 就填 owner/name
+    branch: main
+    intervalHours: 6                    # 多久检查一次；最小 1 分钟
+    autoCheck: true                     # 只读一个 JSON
+    autoInstall: false                  # 装新代码 = 换掉正在跑的模块，默认交给人
+    timeoutMs: 20000
+```
+
+`autoInstall: true` 是给无人值守环境准备的。日常用建议留 `false`：一次自动安装
+恰好赶上你正在等一个长回答，就会在中途换掉正在跑的代码。
+
+### 手动验
+
+```bash
+# 只检查，不装
+node -e "import('./lib/updater.js').then(async m => console.log(await m.fetchRemoteVersion(m.resolveConfig({}))))"
+```
+
+设置页「连接」页签的「插件更新」面板做同样的事，另外多一个安装按钮。
+
 ## 通用记忆提供方（`provider` 行）
 
 `viking` 行是手写的 OpenViking 客户端——只覆盖 OpenViking 一家。Hermes 的记忆后端远不止它：内置的还有 `retaindb`、`byterover`，插件目录里还有 honcho、mem0、hindsight、supermemory、lancedb、cognee 等几十个，而且还在增加。
@@ -290,6 +369,9 @@ OpenViking 只有在 Hermes 侧 `memory.provider: openviking` 且对应 provider
 
 ## 设计说明
 
+- **为什么自动安装默认关**：更新会替换正在运行的模块。默认开着意味着「某个我正在等回答的时刻，代码被换掉了」。检查是只读的，所以默认开。
+- **为什么更新走 pnpm 而不是下载覆盖**：两种安装方式会得到两种产物。更新和首次安装必须是同一条路径，否则「更新过的人」和「刚装的人」跑的其实是两种东西，而出现问题时无法互相复现。
+- **为什么热重载失败必须明说**：HMR 依赖 ESM 模块缓存；打包 worker 里没有这个缓存，只能返回 `restart-required`。把这种情况说成已更新，之后所有「我已经是最新版」的判断都是错的，而且无从发现。
 - **为什么记忆提供方不逐个重写**：Hermes 的 provider 是同一套 Python 契约（`get_tool_schemas()` + `handle_tool_call()`），内置 3 个、插件目录里还有几十个，并且还在增加。逐个写 JS 客户端等于永远追不上，端点一变就静默返回错东西。改成「让 Hermes 自己的加载器当适配器」后，新后端零改动可用。代价是一个 Python 子进程，懒启动、超时即杀、行卸载时关掉。
 - **worker 的 stdout 就是协议**：`provider_bridge.py` 先把 fd 1 dup 走，再把 fd 1 指向 fd 2。否则 provider 里任何 `print`（或它加载的原生库）都会污染协议，表现是「偶尔一次调用失败、重试又好了」。
 - **为什么 cron / 会话历史只读**：往 Hermes 的 cron 写必须过它的 gateway，两套调度器共管一个 `jobs.json`，结果只会是重复触发或者永不触发。只读能让「我那些定时任务还活着吗」不必切回 Hermes。
@@ -338,6 +420,7 @@ node test/memory-store.mjs   # 记忆文件读写（CRLF / 并发 / 来源标记
 node test/schema.mjs         # DSL → JSON Schema 转换
 node test/settings.mjs       # 设置页后端：配置写入、探测、行开关、技能清单
 node test/provider.mjs       # 通用 provider 行（离线 9 条；--live 再跑 11 条真后端）
+node test/updater.mjs        # 更新器（版本比较 / 配置 / 网络失败 / 编码 / link: 保护）
 node test/client-render.mjs  # 把 client.js 按宿主的方式加载并渲染每个页签
 
 # 下面这些要读真实 Hermes 数据，默认跳过：
