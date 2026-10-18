@@ -1,8 +1,8 @@
 {
   "name": "dsh-hermes-bridge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
-  "description": "把 Hermes 的 persona、长期记忆、skills、MCP 服务器与 OpenViking 接进 DeepSeek Harness —— 每个功能是一个可独立启停的行",
+  "description": "把 Hermes 的 persona、长期记忆、skills、MCP 服务器、OpenViking 与任意记忆提供方接进 DeepSeek Harness —— 每个功能是一个可独立启停的行",
   "keywords": [
     "dsh",
     "dsh-plugin",
@@ -31,6 +31,9 @@
     "./preview": "./lib/preview.js",
     "./package.json": "./package.json",
     "./viking": "./lib/viking.js",
+    "./provider": "./lib/provider.js",
+    "./provider-bridge": "./lib/provider-bridge.js",
+    "./claims": "./lib/claims.js",
     "./settings": "./lib/settings.js",
     "./client": "./client.js",
     "./memory-write": "./lib/memory-write.js",
@@ -59,8 +62,8 @@
     "yaml": "^2.5.0"
   },
   "scripts": {
-    "test": "node test/splice.mjs && node test/memory-store.mjs && node test/schema.mjs && node test/settings.mjs",
-    "test:live": "node test/hermes-data.mjs && node test/mount-tools.mjs",
+    "test": "node test/splice.mjs && node test/memory-store.mjs && node test/schema.mjs && node test/settings.mjs && node test/provider.mjs && node test/client-render.mjs",
+    "test:live": "node test/hermes-data.mjs && node test/mount-tools.mjs && node test/provider.mjs --live",
     "test:icon": "node docs/images/verify-icon.mjs",
     "test:meta": "node docs/images/verify-meta.mjs"
   },

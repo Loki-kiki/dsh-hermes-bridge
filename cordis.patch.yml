@@ -6,6 +6,7 @@
 #   hermes-bridge-memory-write  —— memory 工具（记忆，写；条目带 [dsh] 来源标记）
 #   hermes-bridge-skills        —— 把 Hermes 的 skills 库注册成 DSH 的 skill 提供方
 #   hermes-bridge-viking        —— OpenViking 知识库的四个工具（按需检索）
+#   hermes-bridge-provider      —— 通用：把 Hermes 正在用的记忆提供方原样接进来
 #   hermes-bridge-mcp           —— 汇报 Hermes 的 MCP 服务器与已挂载行的差异
 #   hermes-bridge-hermes-data   —— Hermes 的 cron 列表 + 会话历史检索（只读）
 #
@@ -92,6 +93,37 @@
         agent: hermes
         recallLimit: 10
         scoreThreshold: 0.3
+
+    # 通用记忆提供方。上面那行是 OpenViking 专用手写版；这行不写死任何一家 ——
+    # 它去问 Hermes「你现在用的是哪个 provider」，取它的工具 schema 原样注册，
+    # 调用时转发过去。所以 openviking / retaindb / byterover 这些内置的，以及
+    # honcho / mem0 / hindsight / supermemory / lancedb 这些从插件目录装的，
+    # 一个都不用改代码就能用；Hermes 以后新加的 provider 也自动可用。
+    #
+    # 两行会重叠（provider 是 openviking 时工具名一样）。工具名重复在 DSH 里是
+    # 硬错误而不是合并，所以 viking 行先占住 viking_*，这行自动跳过并在日志里
+    # 报出跳过了几个。想用 provider 自己的 schema 就把 viking 行关掉。
+    #
+    # 默认关闭：它要起一个 Python 进程（Hermes 的 venv + agent 树），开着只是
+    # 让所有人多付这份启动开销；OpenViking 用户已经有上面那行手写版了。
+    # 用别的 provider（或想统一走 Hermes 的官方实现）时打开它。
+    - id: hermes-bridge-provider
+      name: dsh-hermes-bridge/provider
+      disabled: true
+      config:
+        # 留空 = 跟随 Hermes 的 memory.provider。填名字 = 试另一个后端（Hermes
+        # 里装好了但没切过去的也行），比如 'retaindb'。
+        provider: ''
+        # 留空 = <hermesHome>/hermes-agent 与它下面的 venv。Hermes 装在别处
+        # （或用的不是自带 venv）时在这里指。
+        # agentRoot: ''
+        # python: ''
+        timeoutMs: 60000
+        probeTimeoutMs: 60000
+        maxTools: 40
+        # 提供方自己的系统提示词段（告诉模型「这个后端里有这些工具」）。
+        enablePrompt: true
+        order: 7
 
     # Hermes 自己的运行时数据，只读。
     # cron 任务和会话历史都活在 Hermes 里，DSH 自带的 schedule/session_search

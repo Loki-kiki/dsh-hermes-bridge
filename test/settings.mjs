@@ -111,6 +111,28 @@ await checkAsync('enabling a row with no override writes nothing', async () => {
   assert.equal(await fsp.readFile(patchFile, 'utf8'), before)
 })
 
+// ── a row the bundle ships disabled ─────────────────────────────────────────
+// The provider row is off in `cordis.patch.yml`. That must read as off, and
+// switching it on must write an override — the old code assumed every row
+// defaulted to enabled and silently refused, so the switch did nothing.
+await checkAsync('a row the bundle ships disabled reads as disabled', async () => {
+  const states = await settings.readRowStates(PROFILE)
+  assert.equal(states['hermes-bridge-provider'].enabled, false)
+  assert.equal(states['hermes-bridge-provider'].overridden, false)
+})
+
+await checkAsync('enabling a bundle-disabled row writes an override', async () => {
+  const result = await settings.writeRowEnabled(PROFILE, 'hermes-bridge-provider', true)
+  assert.equal(result.changed, true)
+  const parsed = YAML.parse(await fsp.readFile(patchFile, 'utf8'))
+  const row = parsed.find((entry) => entry.id === 'hermes-bridge-provider')
+  assert.ok(row, 'an override must have been appended')
+  assert.equal(row.disabled, false)
+  const states = await settings.readRowStates(PROFILE)
+  assert.equal(states['hermes-bridge-provider'].enabled, true)
+  assert.equal(states['hermes-bridge-provider'].overridden, true)
+})
+
 await checkAsync('flipping to the value it already has writes nothing', async () => {
   const before = await fsp.readFile(patchFile, 'utf8')
   const result = await settings.writeRowEnabled(PROFILE, 'hermes-bridge-viking', false)
@@ -241,7 +263,11 @@ await checkAsync('readRowConfigs layers package defaults under the profile patch
 await checkAsync('writeRowConfig fans hermesHome out to every bridge row', async () => {
   const home = process.env.HERMES_HOME
   const result = await settings.writeRowConfig(PROFILE, 'hermesHome', home)
-  assert.equal(result.rows.length, 8, `expected all 8 rows, got ${result.rows.length}`)
+  // Derived, not hardcoded: a new row must not need a test edit to stay honest.
+  // `hermesHome` also fans out to the settings row, which is not a toggle row, so
+  // the count is at least ROWS.length — what matters is that every row is covered.
+  assert.ok(result.rows.length >= settings.ROWS.length, `expected at least ${settings.ROWS.length} rows, got ${result.rows.length}`)
+  for (const id of settings.ROWS) assert.ok(result.rows.includes(id), `${id} must receive the override`)
   const text = await fsp.readFile(patchFile, 'utf8')
   assert.match(text, /hermes-bridge-persona[\s\S]*?hermesHome:/)
   const parsed = YAML.parse(text)
@@ -262,7 +288,7 @@ await checkAsync('writeRowConfig refuses a nonexistent hermesHome', async () => 
 await checkAsync('writeRowConfig with empty value clears the override', async () => {
   await settings.writeRowConfig(PROFILE, 'hermesHome', process.env.HERMES_HOME)
   const result = await settings.writeRowConfig(PROFILE, 'hermesHome', '')
-  assert.equal(result.rows.length, 8)
+  assert.ok(result.rows.length >= settings.ROWS.length)
   const parsed = YAML.parse(await fsp.readFile(patchFile, 'utf8'))
   for (const row of parsed) {
     if (typeof row?.id === 'string' && row.id.startsWith('hermes-bridge-') && !row.id.includes('host')) {

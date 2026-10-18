@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Hermes 桥接",
-    "description": "把 Hermes 的人设、长期记忆、技能库、MCP 服务器与 OpenViking 知识库原生接进 DeepSeek Harness —— 每一项都是可独立启停的一行。"
+    "description": "把 Hermes 的人设、长期记忆、技能库、MCP 服务器、OpenViking 与任意记忆提供方原生接进 DeepSeek Harness —— 每一项都是可独立启停的一行。"
   }
 }

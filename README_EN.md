@@ -8,7 +8,7 @@
 <img alt="license MIT" src="https://img.shields.io/badge/license-MIT-22D3EE?style=flat-square">
 <img alt="works with DSH 0.2.1-rc.2" src="https://img.shields.io/badge/dsh-0.2.1--rc.2-4B6FFF?style=flat-square">
 <img alt="one runtime dependency (yaml)" src="https://img.shields.io/badge/runtime%20dependency-yaml-A855F7?style=flat-square">
-<img alt="91 tests passing" src="https://img.shields.io/badge/tests-91%20passed-2F6F4F?style=flat-square">
+<img alt="offline tests passing" src="https://img.shields.io/badge/tests-offline%20green-2F6F4F?style=flat-square">
 <img alt="five settings pages" src="https://img.shields.io/badge/settings-5%20pages-7DA1DE?style=flat-square">
 <img alt="install verified end to end" src="https://img.shields.io/badge/install-end--to--end%20verified-F0A441?style=flat-square">
 
@@ -54,7 +54,8 @@
 | `hermes-bridge-memory` | `dsh-hermes-bridge/memory` | `MEMORY.md` + `USER.md` (order 6, re-read every assembly), tagged by origin | always |
 | `hermes-bridge-memory-write` | `dsh-hermes-bridge/memory-write` | a `memory` tool: list / add / patch / remove | on demand |
 | `hermes-bridge-skills` | `dsh-hermes-bridge/skills` | recursively discovers Hermes' `skills/` and registers a `ctx.skills` provider | on demand |
-| `hermes-bridge-viking` | `dsh-hermes-bridge/viking` | four OpenViking tools (search / read / browse / remember) | on demand |
+| `hermes-bridge-viking` | `dsh-hermes-bridge/viking` | four OpenViking tools (search / read / browse / remember), hand-written HTTP client | on demand |
+| `hermes-bridge-provider` | `dsh-hermes-bridge/provider` | **generic**: mounts whatever memory backend Hermes is configured to use (openviking / retaindb / byterover / honcho / mem0 / hindsight / supermemory …) | on demand |
 | `hermes-bridge-mcp` | `dsh-hermes-bridge/mcp` | reconciles Hermes' MCP servers with the rows already mounted and reports drift | row level |
 | `hermes-bridge-hermes-data` | `dsh-hermes-bridge/hermes-data` | Hermes' cron list + session history search (**read-only**) | on demand |
 | `hermes-bridge-settings` | `dsh-hermes-bridge/settings` | data backend for the settings page (not a feature) | — |
@@ -95,8 +96,8 @@ Five tabs:
 
 | Tab | Contents |
 |---|---|
-| Overview | switches for the seven feature rows, memory origin distribution, every file the bridge actually reads (real size + mtime), Hermes-side memory settings, live OpenViking health |
-| Connection | the first-run guide: Hermes probe, path input/test/save, OpenViking endpoint and identity, one-click MCP sync |
+| Overview | switches for the eight feature rows, memory origin distribution, every file the bridge actually reads (real size + mtime), Hermes-side memory settings, live OpenViking health |
+| Connection | the first-run guide: Hermes probe, path input/test/save, OpenViking endpoint and identity, **memory-provider panel** (backend / agent tree / interpreter / one-click tool probe), one-click MCP sync |
 | Skills | per-skill switches with search, category filter and bulk toggle — effective on the next conversation |
 | Preview | the persona and memory sections **as actually injected**, rendered from the files rather than guessed from config |
 | Diagnostics | profile, both homes, overlay path, skill state file — each one copyable in a click |
@@ -200,6 +201,9 @@ dsh-hermes-bridge skills [list] [--json] [--limit 200]
 
 # print the byte counts and file status of what will be injected as memory
 dsh-hermes-bridge memory
+
+# probe the memory provider Hermes is configured to use
+dsh-hermes-bridge provider [--provider <name>] [--json]
 ```
 
 Global options: `--hermes-home <path>`; environment: `HERMES_HOME`, `DSH_HOME`.
@@ -218,6 +222,60 @@ Any of the three:
 
 Do not disable `hermes-bridge-host`, and do not move features into it: DSH binds the browser half to the row whose **specifier is the bare package name** (`exactPackageSpecifier()` returns `undefined` for subpaths), so without it the settings UI silently disappears — and any feature you mount on that row can never be switched off again.
 
+## The generic memory provider (`provider` row)
+
+The `viking` row is a hand-written OpenViking client — one backend, by design. Hermes has far more: `retaindb` and `byterover` ship in-tree, and the plugin catalog carries dozens more (honcho, mem0, hindsight, supermemory, lancedb, cognee…), with new ones arriving regularly.
+
+Re-implementing each one's REST/CLI client in JavaScript is a losing race: every new backend, endpoint change and schema tweak needs a matching JS edit, and any drift shows up as a tool that **silently returns the wrong thing** instead of erroring.
+
+So the `provider` row goes the other way — **Hermes' own loader is the adapter**:
+
+```
+DSH  ──tool call──▶  lib/py/provider_bridge.py  ──▶  Hermes' MemoryProvider
+     ◀──JSON─────                       (plugins.memory.load_memory_provider)
+```
+
+The worker does three things: read Hermes' `memory.provider`, take that provider's `get_tool_schemas()`, forward calls to `handle_tool_call()`. Consequences:
+
+- **No drift** — an endpoint change lands in Hermes only; the bridge follows.
+- **No per-provider work** — install honcho in Hermes and its tools appear here.
+- **Same tool names** — the model sees the names Hermes uses, so habits transfer.
+
+### Do the two rows collide?
+
+Yes, when the configured provider *is* OpenViking: both want to register `viking_*`. A duplicate tool name is a **hard error in DSH, not a merge** (`tool "x" is already registered`), so:
+
+- the `viking` row claims the names first (it is earlier in the patch);
+- the `provider` row skips claimed names and reports how many it left alone;
+- to get the provider's own schemas (e.g. `viking_search` with its `mode` argument), turn the `viking` row off.
+
+The `provider` row **ships disabled**: it costs a Python process (Hermes' venv + agent tree), and OpenViking users already have the hand-written row. Switch it on to use another backend, or to standardise on Hermes' own implementation.
+
+### Which Python, which agent tree
+
+Both derive from `hermesHome`: `<hermesHome>/hermes-agent` and the venv inside it. If Hermes lives elsewhere, or uses a different interpreter:
+
+```yaml
+- id: hermes-bridge-provider
+  name: dsh-hermes-bridge/provider
+  config:
+    agentRoot: D:/tools/hermes/hermes-agent
+    python: D:/tools/hermes/hermes-agent/venv/Scripts/python.exe
+    provider: ''      # empty = follow Hermes' memory.provider
+```
+
+The defaults are deliberate: **a first-time user should not have to edit config to get it working**.
+
+### Checking it yourself
+
+```bash
+dsh-hermes-bridge provider                        # human: which backend, ready?, which tools
+dsh-hermes-bridge provider --json                 # for scripts
+dsh-hermes-bridge provider --provider retaindb    # try a backend Hermes is not using
+```
+
+Exit code `0` only when the backend is *available*; `ok` merely means the worker answered, `available` means it can serve calls — keep those apart.
+
 ## Two kinds of memory are not the same thing
 
 | | Built-in memory (`memory` row) | OpenViking (`viking` row) |
@@ -230,6 +288,9 @@ Do not disable `hermes-bridge-host`, and do not move features into it: DSH binds
 OpenViking only really participates when Hermes has `memory.provider: openviking` and the provider plugin is not blocked by `plugins.disabled`. Verify with `test/viking-probe.mjs` afterwards instead of trusting a feeling.
 
 ## Design notes
+
+- **Why the memory provider is not re-implemented per backend**: Hermes' providers share one Python contract (`get_tool_schemas()` + `handle_tool_call()`), with three in-tree and dozens more in the catalog, still growing. Writing a JS client per backend never catches up, and an endpoint change turns into a tool that silently answers from the wrong route. Letting Hermes' own loader act as the adapter makes new backends work with no bridge change. The cost is one Python child process: started lazily, killed on timeout, shut down when the row unloads.
+- **The worker's stdout *is* the protocol**: `provider_bridge.py` dups fd 1 away and then points fd 1 at fd 2. Otherwise any `print` inside a provider (or a native library it loads) corrupts the protocol, which surfaces as "one call failed, the retry worked".
 
 - **Why cron and session history are read-only**: writing to Hermes' cron has to go through its gateway, and two schedulers sharing one `jobs.json` only produce duplicate or never-firing jobs. Read-only answers "are my scheduled jobs still alive?" without switching back to Hermes.
 - **Why MCP is not connected from inside the plugin**: DSH mounts one `dsh-mcp-client` row per server, and rows must live in the profile patch to be visible and individually switchable. The plugin only reconciles and generates rows.
@@ -266,7 +327,7 @@ Install dependencies in the clone first (`yaml` is a runtime dependency; without
 
 ```bash
 npm install
-npm test    # 57 offline tests, runnable on any machine
+npm test    # offline tests, runnable on any machine
 ```
 
 Or run them individually:
@@ -276,9 +337,11 @@ node test/splice.mjs         # managed-block splicing
 node test/memory-store.mjs   # memory files (CRLF / concurrency / origin tags / budget)
 node test/schema.mjs         # DSL -> JSON Schema conversion
 node test/settings.mjs       # settings backend: config writes, probing, row switches, skill list
+node test/provider.mjs       # the generic provider row (9 offline; --live adds 11 against a real backend)
+node test/client-render.mjs  # loads client.js the way the host does and renders every tab
 
-# these read real Hermes data, skipped by default; LIVE_TESTS=1 to run (20 green here):
-LIVE_TESTS=1 npm run test:live   # cron + session db, memory tool end to end
+# these read real Hermes data, skipped by default:
+npm run test:live   # cron + session db, memory tool end to end, 11 real-provider checks
 
 # OpenViking probe (hits a real server; a tenant name is required):
 VIKING_USER=<your-tenant> node test/viking-probe.mjs --endpoint http://127.0.0.1:1933

@@ -22,6 +22,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { personaPreview } from '../lib/preview.js'
+import { diagnoseEnvironment, resolveConfig as resolveProviderConfig } from '../lib/provider.js'
+import { probeProviderSync } from '../lib/provider-bridge.js'
 import { readHermesServers, profilePaths, resolveHermesHome, syncProfile, toMcpRow, renderBlock } from '../lib/mcp-sync.js'
 import { discoverSkills } from '../lib/skills.js'
 import { resolveHermesHome as resolveHermesHomeUtil } from '../lib/util.js'
@@ -44,6 +46,9 @@ const HELP = `dsh-hermes-bridge — 把 Hermes 的 persona / 记忆 / skills / M
 
   dsh-hermes-bridge memory
       打印将被注入的记忆文本长度与文件状态
+
+  dsh-hermes-bridge provider [--provider <name>] [--json]
+      探测 Hermes 的记忆提供方：哪个后端、可用吗、暴露哪些工具
 
 选项:
   --hermes-home <path>  覆盖 Hermes home（默认 $HERMES_HOME 或平台默认）
@@ -259,13 +264,88 @@ function memoryCommand(options) {
 }
 
 /**
+ * `provider` — probe the memory provider Hermes is configured to use.
+ *
+ * The same probe the settings page's button runs, on the CLI so a failure can be
+ * read without opening DSH: a provider that will not load usually explains itself
+ * in the worker's stderr, and that is printed here.
+ *
+ * @param {object} options - parsed options.
+ * @returns {Promise<number>} exit code.
+ */
+async function providerCommand(options) {
+  const config = resolveProviderConfig({
+    hermesHome: options.hermesHome,
+    ...(options.provider === undefined ? {} : { provider: options.provider }),
+    ...(options.agentRoot === undefined ? {} : { agentRoot: options.agentRoot }),
+    ...(options.python === undefined ? {} : { python: options.python }),
+  })
+
+  const environmentError = diagnoseEnvironment(config)
+  if (environmentError !== '') {
+    if (options.json) printJson({ ok: false, environment: environmentError, config })
+    else process.stderr.write(`环境不完整: ${environmentError}\n`)
+    return 1
+  }
+
+  const probe = probeProviderSync(config)
+  if (options.json) {
+    printJson({
+      ok: probe.ok,
+      provider: probe.provider,
+      available: probe.available,
+      reason: probe.reason,
+      tools: probe.tools.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        required: tool.parameters?.required ?? [],
+      })),
+      environment: { hermesHome: config.hermesHome, agentRoot: config.agentRoot, python: config.python },
+      stderr: probe.error === '' ? undefined : probe.error,
+    })
+    // `ok` means the worker answered; `available` means the backend can serve calls.
+    // A script gating on this exit code wants the second one.
+    return probe.ok && probe.available ? 0 : 1
+  }
+
+  const line = (label, value) => process.stdout.write(`  ${label.padEnd(14)} ${value}\n`)
+  process.stdout.write('\n记忆提供方\n')
+  line('Hermes home', config.hermesHome)
+  line('agent 树', config.agentRoot)
+  line('python', config.python)
+  line('provider', probe.provider === '' ? '（没配外置 provider，只有内置 MEMORY.md / USER.md）' : probe.provider)
+  line('可用', probe.available ? '是' : '否')
+  if (probe.reason !== '') line('原因', probe.reason)
+  if (probe.tools.length === 0) {
+    process.stdout.write('\n没有工具可挂载。\n')
+  } else {
+    process.stdout.write(`\n工具（${probe.tools.length}）\n`)
+    for (const tool of probe.tools) {
+      const required = tool.parameters?.required ?? []
+      process.stdout.write(`  ${tool.name}${required.length > 0 ? ` (${required.join(', ')})` : ''}\n`)
+      process.stdout.write(`    ${String(tool.description ?? '').replace(/\s+/gu, ' ').slice(0, 100)}\n`)
+    }
+  }
+  if (probe.error !== '') {
+    process.stdout.write('\nworker 输出（排查用）\n')
+    for (const row of probe.error.split('\n').filter((text) => text.trim() !== '').slice(-15)) {
+      process.stdout.write(`  ${row}\n`)
+    }
+  }
+  process.stdout.write('\n')
+  // `ok` means the worker answered; `available` means the backend can serve calls.
+    // A script gating on this exit code wants the second one.
+    return probe.ok && probe.available ? 0 : 1
+}
+
+/**
  * Entry point.
  * @param {string[]} argv - process arguments after node/script.
  * @returns {Promise<number>} exit code.
  */
 async function main(argv) {
   const [command, ...rest] = argv
-  const valueFlags = new Set(['profile', 'timeout', 'limit', 'hermes-home'])
+  const valueFlags = new Set(['profile', 'timeout', 'limit', 'hermes-home', 'provider', 'agent-root', 'python'])
   const parsed = parseArgs(rest, valueFlags)
   if (command === undefined || command === 'help' || parsed.flags.has('help') || command === '--help' || command === '-h') {
     process.stdout.write(HELP)
@@ -280,6 +360,9 @@ async function main(argv) {
     hermesHome: parsed.values['hermes-home'] === undefined
       ? (resolveHermesHomeUtil(undefined) || resolveHermesHome())
       : path.resolve(parsed.values['hermes-home']),
+    provider: parsed.values.provider,
+    agentRoot: parsed.values['agent-root'] === undefined ? undefined : path.resolve(parsed.values['agent-root']),
+    python: parsed.values.python,
   }
   switch (command) {
     case 'doctor':
@@ -296,6 +379,8 @@ async function main(argv) {
     }
     case 'memory':
       return memoryCommand(options)
+    case 'provider':
+      return await providerCommand(options)
     default:
       process.stderr.write(`未知命令: ${command}\n\n${HELP}`)
       return 2

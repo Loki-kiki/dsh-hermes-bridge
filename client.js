@@ -53,6 +53,7 @@ window.__ModuleLoader__.load({
         'row.memory-write': '记忆写入',
         'row.skills': '技能库',
         'row.viking': 'OpenViking',
+        'row.provider': '记忆提供方（通用）',
         'row.mcp': 'MCP 服务器',
         'row.hermes-data': 'Hermes 数据',
         'row.persona.desc': 'SOUL.md 作为系统提示词段注入，每次请求都在上下文里。',
@@ -60,6 +61,7 @@ window.__ModuleLoader__.load({
         'row.memory-write.desc': '给模型一个 memory 工具（增删改查）。写出的条目带 [dsh] 前缀，和 Hermes 自己写的区分开。',
         'row.skills.desc': '把 Hermes 的分类嵌套技能库注册成 DSH 自己的 skill provider。',
         'row.viking.desc': 'OpenViking 知识库的四个工具，按需检索，不占空转 token。',
+        'row.provider.desc': '不写死任何一家：接 Hermes 当前配置的记忆提供方（openviking / retaindb / byterover / honcho / mem0 …），Hermes 以后新增的也自动可用。默认关闭。',
         'row.mcp.desc': 'Hermes 的 MCP 服务器，每个服务器一条独立行。',
         'row.hermes-data.desc': '只读：Hermes 的 cron 任务清单 + 会话历史全文检索。',
         'row.on': '已启用',
@@ -163,6 +165,22 @@ window.__ModuleLoader__.load({
         mcpNoServers: '（Hermes 配置里没有 MCP 服务器）',
         vikingIdentity: 'OpenViking 身份',
         vikingIdentityHint: 'user 是 OpenViking 里的租户名，和 Hermes 侧 config.yaml 的 memory.openviking.user 保持一致才能查到同一批记忆。',
+
+        providerTitle: '记忆提供方（通用）',
+        providerHint: '这行不写死任何一家：它去问 Hermes 当前用的是哪个记忆后端，把那个后端的工具原样接进来。所以 openviking / retaindb / byterover，以及从插件目录装的 honcho / mem0 / hindsight / supermemory，都不用改代码就能用。',
+        providerInHermes: 'Hermes 当前 provider',
+        providerBuiltin: '内置（只有 MEMORY.md / USER.md，没有外置后端）',
+        providerBlocked: '⚠ 这个 provider 在 Hermes 的 plugins.disabled 里，设了也不会加载。',
+        providerAgentRoot: 'Hermes agent 树',
+        providerPython: 'Python 解释器',
+        providerMissing: '缺',
+        providerProbe: '探测这个 provider',
+        providerProbing: '正在启动 Python 并加载 provider…',
+        providerProbeOk: '可用，暴露 {n} 个工具',
+        providerProbeTools: '这个后端提供的工具',
+        providerRowOff: '这行当前是关的。打开上面的开关（或插件页里那一行）后，这些工具才会出现在对话里。',
+        providerPin: '指定 provider（留空 = 跟随 Hermes）',
+        providerPinHint: '填一个 Hermes 里装好的名字，就能试另一个后端而不动 Hermes 自己的配置。比如 retaindb。',
       },
       en: {
         nav: 'Hermes Bridge',
@@ -182,6 +200,7 @@ window.__ModuleLoader__.load({
         'row.memory-write': 'Memory writes',
         'row.skills': 'Skill library',
         'row.viking': 'OpenViking',
+        'row.provider': 'Memory provider (generic)',
         'row.mcp': 'MCP servers',
         'row.hermes-data': 'Hermes data',
         'row.persona.desc': 'SOUL.md as a system prompt section, present on every request.',
@@ -189,6 +208,7 @@ window.__ModuleLoader__.load({
         'row.memory-write.desc': 'A `memory` tool (list/add/patch/remove). Entries it writes carry a [dsh] prefix so they read apart from Hermes\' own.',
         'row.skills.desc': 'Registers the category-nested Hermes skill tree as a real DSH skill provider.',
         'row.viking.desc': 'Four tools over the OpenViking knowledge base, retrieved on demand.',
+        'row.provider.desc': 'No provider hardcoded: mounts whatever memory backend Hermes is configured to use (openviking / retaindb / byterover / honcho / mem0 …), including ones Hermes gains later. Ships disabled.',
         'row.mcp.desc': 'Hermes MCP servers, one independent row each.',
         'row.hermes-data.desc': 'Read-only: Hermes cron job list plus full-text search over its session history.',
         'row.on': 'Enabled',
@@ -286,6 +306,23 @@ window.__ModuleLoader__.load({
         mcpNoServers: '(no MCP servers in the Hermes config)',
         vikingIdentity: 'OpenViking identity',
         vikingIdentityHint: 'user is the OpenViking tenant name; keep it equal to memory.openviking.user in Hermes\' config.yaml so both sides query the same memories.',
+
+        providerTitle: 'Memory provider (generic)',
+        providerHint: 'Nothing hardcoded here: the row asks Hermes which memory backend it is configured to use and mounts that backend own tools. So openviking / retaindb / byterover — and catalog-installed honcho / mem0 / hindsight / supermemory — all work with no code change.',
+        providerInHermes: 'Provider Hermes uses',
+        providerBuiltin: 'Built-in only (MEMORY.md / USER.md, no external backend)',
+        providerBlocked: 'This provider sits in Hermes plugins.disabled, so setting it does nothing.',
+        providerAgentRoot: 'Hermes agent tree',
+        providerPython: 'Python interpreter',
+        providerMissing: 'missing',
+        providerProbe: 'Probe this provider',
+        providerProbing: 'Starting Python and loading the provider…',
+        providerProbeOk: 'Available, {n} tool(s)',
+        providerProbeTools: 'Tools this backend exposes',
+        providerRowOff: 'This row is currently off. Switch it on above (or on the Plugins page) and these tools appear in the conversation.',
+        providerPin: 'Pin a provider (empty = follow Hermes)',
+        providerPinHint: 'Name a provider Hermes has installed to try another backend without changing the Hermes setting — e.g. retaindb.',
+
       },
     }
 
@@ -548,6 +585,7 @@ window.__ModuleLoader__.load({
       { id: 'hermes-bridge-memory-write', key: 'memory-write' },
       { id: 'hermes-bridge-skills', key: 'skills' },
       { id: 'hermes-bridge-viking', key: 'viking' },
+      { id: 'hermes-bridge-provider', key: 'provider' },
       { id: 'hermes-bridge-mcp', key: 'mcp' },
       { id: 'hermes-bridge-hermes-data', key: 'hermes-data' },
     ]
@@ -763,6 +801,107 @@ window.__ModuleLoader__.load({
           }, block.text === '' ? t('empty') : block.text))))
     }
 
+    // ── provider section (the generic memory-backend row) ─────────────────────
+    /**
+     * The generic provider row's control surface.
+     *
+     * Two different questions live here, and mixing them is what makes this row
+     * confusing: *which backend Hermes uses* (read from config.yaml, free to
+     * show) and *can the bridge actually reach it* (needs a Python process, so it
+     * is behind a button). The panel therefore shows the cheap facts always and
+     * the tool list only after someone asks.
+     */
+    function ProviderSection({ t, data, onSaved, notice, setNotice }) {
+      const info = data.hermes?.provider ?? {}
+      const rowConfig = (data.config ?? {})['hermes-bridge-provider'] ?? {}
+      const rowState = (data.rows ?? []).find(row => row.id === 'hermes-bridge-provider')
+      const [pin, setPin] = useState(rowConfig.provider ?? '')
+      const [probe, setProbe] = useState(undefined)
+      const [busy, setBusy] = useState('')
+
+      const runProbe = useCallback(async () => {
+        setBusy('probe')
+        setProbe(undefined)
+        try {
+          setProbe(await api('/probe-provider', { timeout: 90000 }))
+        } catch (failure) {
+          setNotice(failure?.message ?? String(failure))
+        } finally {
+          setBusy('')
+        }
+      }, [setNotice])
+
+      const savePin = useCallback(async () => {
+        setBusy('pin')
+        try {
+          await post('/config', { key: 'providerName', value: pin })
+          setProbe(undefined)
+          await onSaved()
+        } catch (failure) {
+          setNotice(failure?.message ?? String(failure))
+        } finally {
+          setBusy('')
+        }
+      }, [pin, onSaved, setNotice])
+
+      const tone = info.builtin ? 'warn' : (info.blocked ? 'err' : 'ok')
+
+      return h(Section, { title: t('providerTitle'), hint: t('providerHint') },
+        info.builtin
+          ? h('div', { className: 'hb_callout' }, t('providerBuiltin'))
+          : null,
+        info.blocked ? h('div', { className: 'hb_callout error' }, t('providerBlocked')) : null,
+        rowState !== undefined && rowState.enabled === false
+          ? h('div', { className: 'hb_callout' }, t('providerRowOff'))
+          : null,
+        h(Panel, null,
+          h('dl', { className: 'hb_kv' },
+            h('dt', null, t('providerInHermes')),
+            h('dd', null, info.builtin
+              ? h('span', { className: 'hb_pill' }, t('builtinOnly'))
+              : h('span', { className: 'hb_mono' }, info.name ?? '')),
+            h('dt', null, t('providerAgentRoot')),
+            h('dd', { className: 'hb_mono' },
+              `${info.agentRoot ?? ''} `,
+              h(Pill, { tone: info.agentRootExists ? 'ok' : 'err' }, info.agentRootExists ? '✓' : t('providerMissing'))),
+            h('dt', null, t('providerPython')),
+            h('dd', { className: 'hb_mono' },
+              `${info.python ?? ''} `,
+              h(Pill, { tone: info.pythonExists ? 'ok' : 'warn' }, info.pythonExists ? '✓' : 'python'))),
+          h('div', { className: 'hb_field' },
+            h('label', { className: 'hb_fieldlabel' }, t('providerPin')),
+            h('div', { className: 'hb_fieldhint' }, t('providerPinHint')),
+            h('div', { className: 'hb_fieldrow' },
+              h('input', {
+                className: 'hb_input',
+                placeholder: info.name ?? 'retaindb',
+                value: pin,
+                onChange: event => setPin(event.target.value),
+              }),
+              h('button', { className: 'hb_btn', disabled: busy !== '', onClick: savePin },
+                busy === 'pin' ? t('saving') : t('save')))),
+          h('div', { className: 'hb_toolbar' },
+            h('button', { className: 'hb_btn', disabled: busy !== '', onClick: runProbe },
+              busy === 'probe' ? t('providerProbing') : t('providerProbe')),
+            probe === undefined
+              ? null
+              : h(Pill, { tone: probe.ok && probe.available ? 'ok' : 'err', strong: true },
+                probe.ok && probe.available
+                  ? t('providerProbeOk').replace('{n}', String(probe.tools?.length ?? 0))
+                  : (probe.reason || probe.error || t('providerMissing')))),
+          probe !== undefined && (probe.tools?.length ?? 0) > 0
+            ? h('div', { className: 'hb_skilllist', style: { marginTop: '10px' } },
+              h('div', { className: 'hb_fieldhint', style: { marginBottom: '6px' } }, t('providerProbeTools')),
+              probe.tools.map(tool => h('div', { className: 'hb_skill on', key: tool.name },
+                h('div', { className: 'hb_skillmain' },
+                  h('div', { className: 'hb_skillname' }, tool.name),
+                  h('div', { className: 'hb_skilldesc', title: tool.description }, tool.description)))))
+            : null,
+          probe !== undefined && probe.ok === false && probe.reason !== undefined && probe.reason !== ''
+            ? h('div', { className: 'hb_callout warn', style: { marginTop: '10px' } }, probe.reason)
+            : null))
+    }
+
     // ── connection page (first-run guidance + writable config) ────────────────
     /**
      * The writable face of the settings page. A first-time user lands here from
@@ -844,6 +983,8 @@ window.__ModuleLoader__.load({
                     setNotice(failure?.message ?? String(failure))
                   } finally { setBusy('') }
                 } }, busy === 'identity' ? t('saving') : t('save')))))),
+
+        h(ProviderSection, { t, data, onSaved, notice, setNotice }),
 
         h(Section, { title: t('mcpTitle') },
           h(Panel, null,

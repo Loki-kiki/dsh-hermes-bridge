@@ -8,7 +8,7 @@
 <img alt="许可证 MIT" src="https://img.shields.io/badge/license-MIT-22D3EE?style=flat-square">
 <img alt="适配 DSH 0.2.1-rc.2" src="https://img.shields.io/badge/dsh-0.2.1--rc.2-4B6FFF?style=flat-square">
 <img alt="运行依赖 1 个（yaml）" src="https://img.shields.io/badge/runtime%20dependency-yaml-A855F7?style=flat-square">
-<img alt="测试 91 条通过" src="https://img.shields.io/badge/tests-91%20passed-2F6F4F?style=flat-square">
+<img alt="离线测试全绿" src="https://img.shields.io/badge/tests-offline%20green-2F6F4F?style=flat-square">
 <img alt="设置页 5 个" src="https://img.shields.io/badge/settings-5%20pages-7DA1DE?style=flat-square">
 <img alt="安装链路已端到端实测" src="https://img.shields.io/badge/install-end--to--end%20verified-F0A441?style=flat-square">
 
@@ -41,7 +41,7 @@
 - **不回溯打标**——`MEMORY.md` 是硬字符预算，给老条目补前缀会挤爆 Hermes 自己的写入空间，所以只标新写的。
 - **启动不写配置**——启动时改自己的配置会让 harness 在启动过程中重载自己，那正是「第一次能跑、第二次就坏」的产地。
 - **只读的是刻意的**——cron 与会话历史只读：两套调度器共管一份任务文件，只会得到重复触发或者永不触发。
-- **有测试，也有探测脚本**——91 条测试（57 条离线，任何机器可跑；20 条活体，读真实 Hermes 数据；14 条插件图标像素校验），另有装配树探针。
+- **有测试，也有探测脚本**——离线测试任何机器可跑；活体测试读真实 Hermes 数据；另有插件图标像素校验与装配树探针。数字见「开发与测试」。
 
 ## 它接进来什么
 
@@ -52,7 +52,8 @@
 | `hermes-bridge-memory` | `dsh-hermes-bridge/memory` | `MEMORY.md` + `USER.md`（order 6，每次组装重读），每条标来源 | 常驻 |
 | `hermes-bridge-memory-write` | `dsh-hermes-bridge/memory-write` | `memory` 工具：list / add / patch / remove | 按需调用 |
 | `hermes-bridge-skills` | `dsh-hermes-bridge/skills` | 递归发现 Hermes 的 `skills/`，注册成 `ctx.skills` provider | 按需加载 |
-| `hermes-bridge-viking` | `dsh-hermes-bridge/viking` | OpenViking 的 4 个工具（search / read / browse / remember） | 按需检索 |
+| `hermes-bridge-viking` | `dsh-hermes-bridge/viking` | OpenViking 的 4 个工具（search / read / browse / remember），手写 HTTP 客户端 | 按需检索 |
+| `hermes-bridge-provider` | `dsh-hermes-bridge/provider` | **通用**：把 Hermes 当前配置的记忆提供方原样接进来（openviking / retaindb / byterover / honcho / mem0 / hindsight / supermemory …） | 按需检索 |
 | `hermes-bridge-mcp` | `dsh-hermes-bridge/mcp` | 对账 Hermes 的 MCP 服务器与已挂载行，提示漂移 | 行级 |
 | `hermes-bridge-hermes-data` | `dsh-hermes-bridge/hermes-data` | Hermes 的 cron 清单 + 会话历史检索（**只读**） | 按需调用 |
 | `hermes-bridge-settings` | `dsh-hermes-bridge/settings` | 设置页的数据接口（不是功能） | — |
@@ -96,8 +97,8 @@ dsh plugin --profile <profile> add <本仓库绝对路径>
 
 | 页签 | 内容 |
 |---|---|
-| 总览 | 七个功能行的开关、记忆来源分布、桥接实际读取的每个文件（真实大小 + 修改时间）、Hermes 侧记忆设置、OpenViking 实时健康 |
-| 连接 | 首次安装引导：Hermes 探测、路径输入/测试/保存、OpenViking 端点与身份、一键 MCP 同步 |
+| 总览 | 八个功能行的开关、记忆来源分布、桥接实际读取的每个文件（真实大小 + 修改时间）、Hermes 侧记忆设置、OpenViking 实时健康 |
+| 连接 | 首次安装引导：Hermes 探测、路径输入/测试/保存、OpenViking 端点与身份、**记忆提供方面板**（当前后端 / agent 树 / 解释器 / 一键探测工具清单）、一键 MCP 同步 |
 | 技能 | 技能清单逐个开关 + 搜索 + 分类筛选 + 批量全开全关，下一次对话生效 |
 | 预览 | 人设段和记忆段**实际注入**的原文（直接读文件渲染，不是从配置反推） |
 | 诊断 | profile、Hermes 主目录、DSH 主目录、覆盖层路径、技能状态文件，每项可一键复制 |
@@ -201,6 +202,9 @@ dsh-hermes-bridge skills [list] [--json] [--limit 200]
 
 # 打印将被注入的记忆文本长度与文件状态
 dsh-hermes-bridge memory
+
+# 探测 Hermes 的记忆提供方：哪个后端、可用吗、暴露哪些工具
+dsh-hermes-bridge provider [--provider <name>] [--json]
 ```
 
 全局选项 `--hermes-home <path>`；环境变量 `HERMES_HOME`、`DSH_HOME`。
@@ -219,6 +223,60 @@ dsh-hermes-bridge memory
 
 注意 `hermes-bridge-host` 不要关也不要往里搬功能：DSH 把浏览器半身绑在 **specifier 是裸包名** 的那一行上（`exactPackageSpecifier()` 对子路径返回 `undefined`），没有它设置界面会静默消失；而一旦往那行挂功能，那个功能就再也关不掉了。
 
+## 通用记忆提供方（`provider` 行）
+
+`viking` 行是手写的 OpenViking 客户端——只覆盖 OpenViking 一家。Hermes 的记忆后端远不止它：内置的还有 `retaindb`、`byterover`，插件目录里还有 honcho、mem0、hindsight、supermemory、lancedb、cognee 等几十个，而且还在增加。
+
+在 JS 里逐个重写它们的 REST / CLI 客户端是条死路：每家新后端、每个端点变更、每次 schema 调整都要跟着改一份 JS，一旦漏改，表现是**工具静默返回错东西**而不是报错。
+
+所以 `provider` 行走的是反方向：**让 Hermes 自己的加载器当适配器**。
+
+```
+DSH  ──工具调用──▶  lib/py/provider_bridge.py  ──▶  Hermes 的 MemoryProvider
+      ◀──JSON────                         （plugins.memory.load_memory_provider）
+```
+
+worker 做的事只有三件：读 Hermes 的 `memory.provider`、取那个 provider 的 `get_tool_schemas()`、把调用转发给 `handle_tool_call()`。于是：
+
+- **零漂移**：后端换了端点，只在 Hermes 里改，桥接自动跟上；
+- **零适配工作**：在 Hermes 里装了 honcho，这里就自动出现 honcho 的工具；
+- **工具名一致**：模型看到的工具名就是 Hermes 用的那套，习惯可以迁移。
+
+### 两行会不会打架
+
+会重叠：`provider` 是 `openviking` 时，两边都想注册 `viking_*`。DSH 里**工具名重复是硬错误不是合并**（`tool "x" is already registered`），所以：
+
+- `viking` 行先占住名字（patch 顺序在前）；
+- `provider` 行跳过已被占用的名字，并在日志里报出跳过了几个；
+- 想用 provider 自己的 schema（比如 `viking_search` 多了 `mode` 参数）就把 `viking` 行关掉。
+
+`provider` 行**默认关闭**：它要起一个 Python 进程（Hermes 的 venv + agent 树），开着等于让所有人多付这份启动开销，而 OpenViking 用户已经有手写版了。用别的后端、或者想统一走 Hermes 官方实现时再打开。
+
+### 用哪个 Python、哪个 agent 树
+
+默认从 `hermesHome` 推导：`<hermesHome>/hermes-agent` 与它下面的 `venv`。Hermes 装在别处、或者用的不是自带 venv，就在行配置里指：
+
+```yaml
+- id: hermes-bridge-provider
+  name: dsh-hermes-bridge/provider
+  config:
+    agentRoot: D:/tools/hermes/hermes-agent
+    python: D:/tools/hermes/hermes-agent/venv/Scripts/python.exe
+    provider: ''      # 留空 = 跟随 Hermes 的 memory.provider
+```
+
+不写也能跑，这是刻意的：**陌生人装完不该先编辑配置文件**。
+
+### 怎么自己验
+
+```bash
+dsh-hermes-bridge provider            # 人读：哪个后端、可用吗、暴露哪些工具
+dsh-hermes-bridge provider --json     # 脚本读
+dsh-hermes-bridge provider --provider retaindb   # 试一个 Hermes 没在用的后端
+```
+
+退出码 `0` 只在「后端可用」时给；`ok` 只表示 worker 答话了，`available` 才表示后端能服务调用——这两个别混。
+
 ## 两套记忆不是一回事
 
 | | 内置记忆（`memory` 行） | OpenViking（`viking` 行） |
@@ -232,6 +290,8 @@ OpenViking 只有在 Hermes 侧 `memory.provider: openviking` 且对应 provider
 
 ## 设计说明
 
+- **为什么记忆提供方不逐个重写**：Hermes 的 provider 是同一套 Python 契约（`get_tool_schemas()` + `handle_tool_call()`），内置 3 个、插件目录里还有几十个，并且还在增加。逐个写 JS 客户端等于永远追不上，端点一变就静默返回错东西。改成「让 Hermes 自己的加载器当适配器」后，新后端零改动可用。代价是一个 Python 子进程，懒启动、超时即杀、行卸载时关掉。
+- **worker 的 stdout 就是协议**：`provider_bridge.py` 先把 fd 1 dup 走，再把 fd 1 指向 fd 2。否则 provider 里任何 `print`（或它加载的原生库）都会污染协议，表现是「偶尔一次调用失败、重试又好了」。
 - **为什么 cron / 会话历史只读**：往 Hermes 的 cron 写必须过它的 gateway，两套调度器共管一个 `jobs.json`，结果只会是重复触发或者永不触发。只读能让「我那些定时任务还活着吗」不必切回 Hermes。
 - **为什么 MCP 不在这里自己连**：DSH 每个 MCP 服务器一条 `dsh-mcp-client` 行，行住在 profile patch 里才能逐台开关、在插件页可见。插件只负责对账与生成行。
 - **为什么 skills 要自己写 provider**：DSH 自带的 `dsh-skill-filesystem` 只认 `<root>/<name>/SKILL.md` 一层，Hermes 的 skill 是按分类嵌套的，直接把根指过去一个都发现不了。
@@ -267,7 +327,7 @@ schema must be a JSON Schema of 'type: "object"', got 'type: null'
 
 ```bash
 npm install
-npm test    # 57 条离线测试，任何机器都能跑
+npm test    # 离线测试，任何机器都能跑
 ```
 
 也可以单独跑：
@@ -277,9 +337,11 @@ node test/splice.mjs         # 受管区块拼接
 node test/memory-store.mjs   # 记忆文件读写（CRLF / 并发 / 来源标记 / 预算）
 node test/schema.mjs         # DSL → JSON Schema 转换
 node test/settings.mjs       # 设置页后端：配置写入、探测、行开关、技能清单
+node test/provider.mjs       # 通用 provider 行（离线 9 条；--live 再跑 11 条真后端）
+node test/client-render.mjs  # 把 client.js 按宿主的方式加载并渲染每个页签
 
-# 下面这些要读真实 Hermes 数据，默认跳过，LIVE_TESTS=1 才跑（本机 20 条全绿）：
-LIVE_TESTS=1 npm run test:live   # cron 与 session 库、memory 工具端到端
+# 下面这些要读真实 Hermes 数据，默认跳过：
+npm run test:live   # cron 与 session 库、memory 工具端到端、真 provider 的 11 条
 
 # OpenViking 探针（打真服务器，必须给租户名）：
 VIKING_USER=<你的租户名> node test/viking-probe.mjs --endpoint http://127.0.0.1:1933
