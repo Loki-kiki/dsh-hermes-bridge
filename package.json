@@ -1,6 +1,6 @@
 {
   "name": "dsh-hermes-bridge",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "type": "module",
   "description": "把 Hermes 的 persona、长期记忆、skills、MCP 服务器、OpenViking、任意记忆提供方接进 DeepSeek Harness，并支持自动检查/安装自身更新 —— 每个功能是一个可独立启停的行",
   "keywords": [
