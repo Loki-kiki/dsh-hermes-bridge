@@ -79,6 +79,19 @@ await check('unknown config keys are rejected with the accepted list', () => {
   return 'rejected'
 })
 
+await check('the shipped config (provider: empty) validates — empty means "follow Hermes"', () => {
+  // This is the default the package ships in cordis.patch.yml. It used to be
+  // rejected by `optionalString`, which requires a non-empty value, so the row
+  // could never mount with its own default config. A shipped default that fails
+  // its own validator is invisible in unit tests that always pass a name.
+  const shipped = resolveConfig({ hermesHome, provider: '' })
+  assert.equal(shipped.provider, '')
+  const absent = resolveConfig({ hermesHome })
+  assert.equal(absent.provider, '')
+  assert.throws(() => resolveConfig({ hermesHome, provider: 42 }), /provider must be a string/u)
+  return 'empty accepted, non-string rejected'
+})
+
 await check('a provider name can be pinned to try a backend Hermes is not using', () => {
   const pinned = resolveConfig({ hermesHome, provider: 'retaindb' })
   assert.equal(pinned.provider, 'retaindb')

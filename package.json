@@ -62,7 +62,7 @@
     "yaml": "^2.5.0"
   },
   "scripts": {
-    "test": "node test/splice.mjs && node test/memory-store.mjs && node test/schema.mjs && node test/settings.mjs && node test/provider.mjs && node test/client-render.mjs",
+    "test": "node test/splice.mjs && node test/memory-store.mjs && node test/schema.mjs && node test/settings.mjs && node test/provider.mjs && node test/mount-shipped.mjs && node test/client-render.mjs",
     "test:live": "node test/hermes-data.mjs && node test/mount-tools.mjs && node test/provider.mjs --live",
     "test:icon": "node docs/images/verify-icon.mjs",
     "test:meta": "node docs/images/verify-meta.mjs"
