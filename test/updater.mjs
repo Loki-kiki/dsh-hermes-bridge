@@ -472,5 +472,89 @@ await check('pnpm diagnostics are decoded, not shown as mojibake', async () => {
   return error.slice(0, 70)
 })
 
+// ── hot reload branches ────────────────────────────────────────────────────
+/**
+ * Mount with a fake `hmr` service so the reload path is exercised.
+ * The real service needs a live DSH; these tests pin the *decision* we make for
+ * each of its three possible answers, which is what the UI reports.
+ */
+async function mountWithHmr(hmr) {
+  const profile = await fsp.mkdtemp(path.join(os.tmpdir(), 'hb-hmr-'))
+  await fsp.writeFile(path.join(profile, 'package.json'), JSON.stringify({
+    name: 'probe',
+    dependencies: { 'dsh-hermes-bridge': 'github:Loki-kiki/dsh-hermes-bridge' },
+  }), 'utf8')
+  const services = new Map()
+  const ctx = {
+    logger: { info() {}, warn() {}, error() {} },
+    provide: (name, value) => services.set(name, value),
+    get: (name) => {
+      if (name === 'profileContext') return { dir: profile, name: 'probe' }
+      if (name === 'hmr') return hmr
+      // Stub pnpm: these tests are about the reload decision, not about pnpm
+      // resolution (which needs the Electron runtime). A fake process that exits
+      // 0 stands in for a successful install.
+      if (name === 'hermesBridgePnpm') {
+        return { ok: true, source: 'stub', command: process.execPath, args: ['-e', 'process.exit(0)'], shell: false, version: 'stub' }
+      }
+      return services.get(name)
+    },
+    inject: (_deps, fn) => fn({ effect: (fn2) => { fn2() } }),
+  }
+  updater.apply(ctx, {})
+  return { controller: services.get('hermesBridgeUpdater'), profile }
+}
+
+await check('a successful reconcile reports the reload as applied', async () => {
+  const calls = []
+  const hmr = {
+    runExclusive: async (fn) => { calls.push('runExclusive'); return fn() },
+    reconcileProfile: async () => { calls.push('reconcile'); return { warnings: [] } },
+  }
+  const { controller, profile } = await mountWithHmr(hmr)
+  await withFetch(
+    async () => new Response(JSON.stringify({ version: '99.0.0' }), { status: 200 }),
+    () => controller.check(true),
+  )
+  const snapshot = await controller.install('99.0.0')
+  await fsp.rm(profile, { recursive: true, force: true })
+  assert.ok(calls.includes('runExclusive'), 'reconcileProfile must run inside runExclusive — it throws otherwise')
+  assert.equal(snapshot.lastInstall.reload.applied, true, 'a reconcile with no restartReason means the new code is live')
+  return 'applied'
+})
+
+await check('a restartReason is surfaced, never reported as applied', async () => {
+  const hmr = {
+    runExclusive: async (fn) => fn(),
+    reconcileProfile: async () => ({ warnings: ['module-comparison'], restartReason: 'module-comparison' }),
+  }
+  const { controller, profile } = await mountWithHmr(hmr)
+  await withFetch(
+    async () => new Response(JSON.stringify({ version: '99.0.0' }), { status: 200 }),
+    () => controller.check(true),
+  )
+  const snapshot = await controller.install('99.0.0')
+  await fsp.rm(profile, { recursive: true, force: true })
+  assert.equal(snapshot.lastInstall.reload.applied, false)
+  assert.equal(snapshot.lastInstall.reload.reason, 'module-comparison')
+  return 'restart required is reported as such'
+})
+
+await check('a throwing reconcile is reported, not swallowed into success', async () => {
+  const hmr = {
+    runExclusive: async () => { throw new Error('HMR is disposed') },
+    reconcileProfile: async () => ({}),
+  }
+  const { controller, profile } = await mountWithHmr(hmr)
+  await withFetch(
+    async () => new Response(JSON.stringify({ version: '99.0.0' }), { status: 200 }),
+    () => controller.check(true),
+  )
+  const snapshot = await controller.install('99.0.0')
+  await fsp.rm(profile, { recursive: true, force: true })
+  assert.equal(snapshot.lastInstall.reload.applied, false)
+  assert.match(snapshot.lastInstall.reload.reason, /disposed/u)
+})
+
 console.log(`\n${passed}/${passed + failed} passed`)
 if (failed > 0) process.exitCode = 1
