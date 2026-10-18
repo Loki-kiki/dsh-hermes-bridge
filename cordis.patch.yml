@@ -141,6 +141,10 @@
         # 自动安装默认关：装新代码等于换掉正在跑的模块，该由人拍板。
         autoInstall: false
         timeoutMs: 20000
+        # 留空 = 自动探测。桌面版 DSH 的 pnpm 不在 PATH 上，它用 Electron 自己
+        # 跑 resources/runtime/primary-runtime/dependencies/pnpm/bin/pnpm.mjs ——
+        # 这里会自动找到那一份。只有在自建环境里才需要填。
+        # pnpm: ''
 
     # Hermes 自己的运行时数据，只读。
     # cron 任务和会话历史都活在 Hermes 里，DSH 自带的 schedule/session_search

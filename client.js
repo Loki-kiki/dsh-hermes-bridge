@@ -190,6 +190,12 @@ window.__ModuleLoader__.load({
         updateFailed: '安装失败',
         updateRowMissing: '更新器这一行没挂载（在插件页打开「自动更新」）。',
         updateLinkInstall: '这一份是 link: 到工作副本的，用 git 更新它，pnpm 管不了。',
+        updateSource: '安装来源',
+        updateSourceGit: 'GitHub（可更新）',
+        updateSourceLink: '本地链接（用 git 更新）',
+        updateSourceRegistry: 'registry（不是本 repo 的包）',
+        updateSourceOther: '未知来源',
+        updateNotOurs: '这一份不是从本仓库装的。GitHub 上的版本号比它大也没用 —— npm 上同名的包属于别人，装过来就是别人的代码。要更新请先把它换成 GitHub 依赖。',
 
         providerTitle: '记忆提供方（通用）',
         providerHint: '这行不写死任何一家：它去问 Hermes 当前用的是哪个记忆后端，把那个后端的工具原样接进来。所以 openviking / retaindb / byterover，以及从插件目录装的 honcho / mem0 / hindsight / supermemory，都不用改代码就能用。',
@@ -356,6 +362,12 @@ window.__ModuleLoader__.load({
         updateFailed: 'Install failed',
         updateRowMissing: 'The updater row is not mounted (enable "Auto-update" on the Plugins page).',
         updateLinkInstall: 'This copy is a link: to a working directory; update it with git — pnpm cannot.',
+        updateSource: 'Install source',
+        updateSourceGit: 'GitHub (updateable)',
+        updateSourceLink: 'Local link (update with git)',
+        updateSourceRegistry: 'Registry (a different package)',
+        updateSourceOther: 'Unknown source',
+        updateNotOurs: 'This copy was not installed from this repository. A bigger version number on GitHub means nothing here — the registry package with this name belongs to someone else. Switch the dependency to the GitHub source first.',
 
         providerTitle: 'Memory provider (generic)',
         providerHint: 'Nothing hardcoded here: the row asks Hermes which memory backend it is configured to use and mounts that backend own tools. So openviking / retaindb / byterover — and catalog-installed honcho / mem0 / hindsight / supermemory — all work with no code change.',
@@ -852,6 +864,25 @@ window.__ModuleLoader__.load({
           }, block.text === '' ? t('empty') : block.text))))
     }
 
+    /**
+     * 把「这份从哪儿装的」翻成一句人话。
+     *
+     * 这一项不是装饰：`dsh-hermes-bridge` 在 npm 上属于别人，所以「从 registry
+     * 装的」和「从 GitHub 装的」是两种完全不同的东西，界面必须说清是哪种，
+     * 否则用户看到「有新版本」会以为是自己的那份。
+     *
+     * @param {Function} t - 翻译函数。
+     * @param {{kind: string}|undefined} source - 后端给出来源。
+     * @returns {object} 一个带色调的标签。
+     */
+    function sourceLabel(t, source) {
+      const kind = source?.kind ?? 'unknown'
+      if (kind === 'git') return h(Pill, { tone: 'ok' }, t('updateSourceGit'))
+      if (kind === 'link') return h(Pill, { tone: 'warn' }, t('updateSourceLink'))
+      if (kind === 'registry') return h(Pill, { tone: 'warn', strong: true }, t('updateSourceRegistry'))
+      return h(Pill, { tone: 'warn' }, t('updateSourceOther'))
+    }
+
     // ── update section (the updater row's control surface) ────────────────────
     /**
      * 插件更新面板。
@@ -916,6 +947,9 @@ window.__ModuleLoader__.load({
         state.error !== '' && state.error !== undefined
           ? h('div', { className: 'hb_callout' }, `${t('updateFailed')}: ${state.error}`)
           : null,
+        state.versionDelta === true && state.updateAvailable !== true
+          ? h('div', { className: 'hb_callout warn' }, t('updateNotOurs'))
+          : null,
         h(Panel, null,
           h('dl', { className: 'hb_kv' },
             h('dt', null, t('updateCurrent')),
@@ -930,6 +964,8 @@ window.__ModuleLoader__.load({
                 : (state.remoteVersion === '' ? null : h(Pill, { tone: 'ok' }, t('updateLatest')))),
             h('dt', null, t('updateRepo')),
             h('dd', { className: 'hb_mono' }, `${state.repo ?? ''}@${state.branch ?? ''}`),
+            h('dt', null, t('updateSource')),
+            h('dd', null, sourceLabel(t, state.source)),
             h('dt', null, t('updateInterval')),
             h('dd', null,
               h(Pill, { tone: state.autoCheck ? 'ok' : undefined }, t('updateAutoCheck')),

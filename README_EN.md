@@ -235,9 +235,47 @@ It reads `version` from the `package.json` in the repository and compares it wit
 - Version comparison is hand-written (`<major>.<minor>.<patch>` plus a prerelease segment) rather than pulling in `semver`. One more runtime dependency is one more thing that can fail to install.
 - It reads `raw.githubusercontent.com` instead of the GitHub API: the anonymous API is limited to 60 requests/hour/IP, which a 6-hourly check eventually hits; raw has no such limit and serves the real file from the repo. `ETag` is used, so a 304 costs no transfer.
 
+### First, a trap: the npm package with this name is someone else's
+
+`dsh-hermes-bridge` on npm belongs to another person (`xiaoyu7044`'s
+`dual-agent-integration`, still publishing in Oct 2026). This package lives on
+GitHub only — it was **never published to a registry**.
+
+The consequence: updating "by version number from the registry" installs someone
+else's code, and it *succeeds*, with a version number bigger than ours. It looks
+exactly like a normal update. So updates follow only how your copy is installed:
+
+| Dependency | Updateable |
+|---|---|
+| `github:Loki-kiki/dsh-hermes-bridge` | ✅ reinstalls from the same source, newest commit |
+| `link:...` | ❌ tells you to update that directory with git |
+| `file:...` | ❌ tells you to edit that directory |
+| `^0.4.1` (semver, from a registry) | ❌ **refused**, with an explanation that the package is not ours |
+
+The panel lists the install source separately. If this copy did not come from the
+repository, a bigger GitHub version shows an explanation and no update button —
+better to not update than to install the wrong thing.
+
 ### How it installs
 
 Through pnpm — the same package manager the Plugins page uses. It does not download and overwrite files, so "updated" and "freshly installed" end up byte-identical instead of being two different things that cannot reproduce each other's bugs.
+
+**But "the same pnpm" has to be found first.** The desktop app does not have pnpm
+on `PATH`: it runs its bundled copy through Electron itself
+(`resources/runtime/primary-runtime/dependencies/pnpm/bin/pnpm.mjs`). A bare
+`spawn('pnpm')` from a plugin gets "not recognized as an internal or external
+command" — not because the environment is broken, but because the entry point is
+wrong. Resolution order:
+
+1. `pnpm:` in the row config (when you name one explicitly)
+2. the DSH-bundled copy (derived from `process.execPath`) ← the desktop case
+3. `pnpm` on `PATH` (self-hosted `dsh web`, or a global install)
+
+Each candidate is actually invoked with `--version` rather than checked for
+existence: a file that exists but cannot run is more common than a missing one,
+and that failure points inside pnpm instead of at the wrong entry point. The
+resolved copy is recorded with the install result, so a failure shows which one
+was used.
 
 What it installs depends on **how your copy was installed**:
 
@@ -277,6 +315,7 @@ GitHub is often slow or unreachable from mainland China. Checking is bounded by 
     autoCheck: true                     # reads one JSON
     autoInstall: false                  # installing replaces running code; leave it to a human
     timeoutMs: 20000
+    # pnpm: ''        # empty = autodetect (the DSH-bundled copy wins)
 ```
 
 `autoInstall: true` is for unattended setups. Day to day, `false` is safer: an automatic install that lands while you are waiting on a long answer swaps the code out mid-flight.

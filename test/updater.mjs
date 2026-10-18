@@ -239,7 +239,10 @@ await check('a snapshot reports the running version before any check', async () 
   assert.equal(snapshot.checkedAt, 0)
 })
 
-await check('check() records an update when the remote is newer', async () => {
+await check('check() offers an update only when this copy came from the repo', async () => {
+  // mountRow has no profileContext, so the dependency source is unknown — and an
+  // unknown source must NOT produce an update button. Getting this wrong is how
+  // a registry copy of someone else's package gets installed.
   const { updater: controller } = await mountRow()
   await withFetch(
     async () => new Response(JSON.stringify({ version: '99.0.0' }), { status: 200 }),
@@ -247,8 +250,62 @@ await check('check() records an update when the remote is newer', async () => {
   )
   const snapshot = await controller.snapshot()
   assert.equal(snapshot.remoteVersion, '99.0.0')
-  assert.equal(snapshot.updateAvailable, true)
+  assert.equal(snapshot.versionDelta, true, 'the version really is newer')
+  assert.equal(snapshot.updateAvailable, false, 'but it is not ours to install')
   assert.ok(snapshot.checkedAt > 0)
+  return `remote 99.0.0, source ${snapshot.source?.kind}`
+})
+
+await check('a git dependency makes the update installable', async () => {
+  const profile = await fsp.mkdtemp(path.join(os.tmpdir(), 'hb-src-'))
+  await fsp.writeFile(path.join(profile, 'package.json'), JSON.stringify({
+    name: 'probe',
+    dependencies: { 'dsh-hermes-bridge': 'github:Loki-kiki/dsh-hermes-bridge' },
+  }), 'utf8')
+  const services = new Map()
+  const ctx = {
+    logger: { info() {}, warn() {}, error() {} },
+    provide: (name, value) => services.set(name, value),
+    get: (name) => (name === 'profileContext' ? { dir: profile, name: 'probe' } : services.get(name)),
+    inject: (_deps, fn) => fn({ effect: (fn2) => { fn2() } }),
+  }
+  updater.apply(ctx, {})
+  const controller = services.get('hermesBridgeUpdater')
+  const snapshot = await withFetch(
+    async () => new Response(JSON.stringify({ version: '99.0.0' }), { status: 200 }),
+    () => controller.check(true),
+  )
+  await fsp.rm(profile, { recursive: true, force: true })
+  assert.equal(snapshot.source.kind, 'git')
+  assert.equal(snapshot.updateAvailable, true)
+  return 'github: dependency is updateable'
+})
+
+await check('a registry dependency is never offered for install', async () => {
+  // The registry package with this name belongs to someone else. Even with a
+  // "newer" version on GitHub, the button must stay off.
+  const profile = await fsp.mkdtemp(path.join(os.tmpdir(), 'hb-src2-'))
+  await fsp.writeFile(path.join(profile, 'package.json'), JSON.stringify({
+    name: 'probe',
+    dependencies: { 'dsh-hermes-bridge': '^0.4.1' },
+  }), 'utf8')
+  const services = new Map()
+  const ctx = {
+    logger: { info() {}, warn() {}, error() {} },
+    provide: (name, value) => services.set(name, value),
+    get: (name) => (name === 'profileContext' ? { dir: profile, name: 'probe' } : services.get(name)),
+    inject: (_deps, fn) => fn({ effect: (fn2) => { fn2() } }),
+  }
+  updater.apply(ctx, {})
+  const controller = services.get('hermesBridgeUpdater')
+  const snapshot = await withFetch(
+    async () => new Response(JSON.stringify({ version: '99.0.0' }), { status: 200 }),
+    () => controller.check(true),
+  )
+  assert.equal(snapshot.source.kind, 'registry')
+  assert.equal(snapshot.updateAvailable, false)
+  await fsp.rm(profile, { recursive: true, force: true })
+  return 'registry copy is not silently replaced'
 })
 
 await check('check() does not claim an update when the remote is the same', async () => {
