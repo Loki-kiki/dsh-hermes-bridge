@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="dsh-hermes-bridge">
+  <defs>
+    <linearGradient id="ramp" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#A855F7"/>
+    </linearGradient>
+    <clipPath id="plate"><rect x="14" y="14" width="228" height="228" rx="48"/></clipPath>
+    <filter id="glow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+  </defs>
+  <rect x="4" y="4" width="248" height="248" rx="58" fill="url(#ramp)"/>
+  <rect x="14" y="14" width="228" height="228" rx="48" fill="#0B1220"/>
+  <g clip-path="url(#plate)">
+    <g filter="url(#glow)" opacity="0.55"><path d="M 40.0 192.0 A 91.67 91.67 0 0 1 216.0 192.0" fill="none" stroke="url(#ramp)" stroke-width="15" stroke-linecap="round"/><circle cx="40" cy="192" r="14" fill="url(#ramp)"/><circle cx="128" cy="126" r="16" fill="url(#ramp)"/><circle cx="216" cy="192" r="14" fill="url(#ramp)"/></g>
+    <path d="M 40.0 192.0 A 91.67 91.67 0 0 1 216.0 192.0" fill="none" stroke="url(#ramp)" stroke-width="15" stroke-linecap="round"/>
+    <circle cx="40" cy="192" r="14" fill="url(#ramp)" stroke="#0B1220" stroke-width="3"/><circle cx="40" cy="192" r="5" fill="#0B1220"/><circle cx="128" cy="126" r="16" fill="url(#ramp)" stroke="#0B1220" stroke-width="3"/><circle cx="128" cy="126" r="5" fill="#0B1220"/><circle cx="216" cy="192" r="14" fill="url(#ramp)" stroke="#0B1220" stroke-width="3"/><circle cx="216" cy="192" r="5" fill="#0B1220"/>
+  </g>
+</svg>

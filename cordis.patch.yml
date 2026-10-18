@@ -1,0 +1,108 @@
+# dsh-hermes-bridge — 把 Hermes 的 persona、记忆、skills、MCP 接进 DeepSeek Harness
+#
+# 每个功能各占一行，所以都能在「插件」页或本插件自己的设置页里单独开关：
+#   hermes-bridge-persona       —— SOUL.md 接进系统提示词（人设）
+#   hermes-bridge-memory        —— MEMORY.md + USER.md 接进系统提示词（记忆，读）
+#   hermes-bridge-memory-write  —— memory 工具（记忆，写；条目带 [dsh] 来源标记）
+#   hermes-bridge-skills        —— 把 Hermes 的 skills 库注册成 DSH 的 skill 提供方
+#   hermes-bridge-viking        —— OpenViking 知识库的四个工具（按需检索）
+#   hermes-bridge-mcp           —— 汇报 Hermes 的 MCP 服务器与已挂载行的差异
+#   hermes-bridge-hermes-data   —— Hermes 的 cron 列表 + 会话历史检索（只读）
+#
+# hermes-bridge-settings 不是功能，是设置页的数据接口。
+# 还有一行裸包名的 hermes-bridge-host：DSH 只把浏览器半身（client.js）绑在
+# 裸包名那一行上，子路径行不会携带它，所以需要它来承载设置界面。
+#
+# 关掉某一行的三种办法（任选其一）：
+#   1. 设置页 / 插件页里该行旁边的开关
+#   2. profile 的 cordis.patch.yml 里加：
+#        - id: hermes-bridge-skills
+#          disabled: true
+#   3. 本文件里把该行的 disabled 改成 true（改的是包内默认值，升级会覆盖）
+#
+# 路径不需要写：所有行默认从 Hermes 自身的位置推导
+# （$HERMES_HOME；Windows 上即 %LOCALAPPDATA%\hermes）。
+# 想指到别处再在 profile patch 里覆盖该行的 hermesHome。
+
+- insert:
+    # 承载浏览器半身（设置界面）。它自己不挂任何功能：把功能复制到这里，
+    # 那个功能就再也关不掉了。
+    - id: hermes-bridge-host
+      name: dsh-hermes-bridge
+      config: {}
+
+    - id: hermes-bridge-persona
+      name: dsh-hermes-bridge/persona
+      config:
+        file: SOUL.md
+        maxBytes: 32768
+
+    - id: hermes-bridge-memory
+      name: dsh-hermes-bridge/memory
+      config:
+        dir: memories
+        files: [MEMORY.md, USER.md]
+        maxBytes: 32768
+        withLabels: true
+
+    # 记忆的写入端。上面那行只读，这行给模型一个 memory 工具（list/add/patch/remove）。
+    # 两边写同一份文件，所以每条由这里写出的条目都带 [dsh] 前缀；
+    # 没有前缀的是打标之前 Hermes 写的，读回来算作 hermes（显示为 [hermes?]，表示推断）。
+    # 不回溯打标：MEMORY.md 是硬字符预算，给所有旧条目补齐前缀会撑爆 Hermes 自己的写入。
+    - id: hermes-bridge-memory-write
+      name: dsh-hermes-bridge/memory-write
+      config:
+        origin: dsh
+        # 允许模型把条目标成别的来源（比如代 Hermes 记一笔）。默认关：
+        # 开着等于允许它把自己的话伪装成 Hermes 说的。
+        allowOriginOverride: false
+
+    - id: hermes-bridge-skills
+      name: dsh-hermes-bridge/skills
+      config:
+        dir: skills
+        providerName: hermes
+        rank: 350
+        maxDepth: 4
+        # 设置页里逐个开关技能时写这里。不写就由 settings 行按 profile 推导
+        # （~/.dsh/profiles/<profile>/hermes-bridge-skills.json）—— 别在这里写
+        # ${DSH_HOME} 之类：DSH 的配置插值只认 !!js，不认 shell 展开，
+        # 写进去会变成一个字面量路径。
+
+    - id: hermes-bridge-mcp
+      name: dsh-hermes-bridge/mcp
+      config:
+        # profile 不写：运行时以 profileContext 为准，写死会让别的 profile
+        # 里的漂移报告指向错的文件。只有拿不到 profileContext 的装配才回落到
+        # 默认值（desktop，DSH 桌面版自己的 profile 名）。
+        warnOnDrift: true
+
+    # OpenViking 是「按需检索」的外置记忆库，和上面 memory 行的纯文本常驻注入
+    # 是两套机制。它只在 Hermes 里 memory.provider = openviking 且插件未被禁用时
+    # 才真正参与；这里给它四个工具，让 DSH 也能主动去查。
+    # 服务没起也不会拖垮启动：调用时只会返回一条「连不上」的明确说明。
+    - id: hermes-bridge-viking
+      name: dsh-hermes-bridge/viking
+      config:
+        endpoint: http://127.0.0.1:1933
+        account: default
+        # 你的 OpenViking 租户名。留空 = 未配置：viking_* 工具会直接返回
+        # 「请先配置 user」的说明，而不是把记忆读写到别人的目录里。
+        user: ''
+        agent: hermes
+        recallLimit: 10
+        scoreThreshold: 0.3
+
+    # Hermes 自己的运行时数据，只读。
+    # cron 任务和会话历史都活在 Hermes 里，DSH 自带的 schedule/session_search
+    # 看不到它们 —— 没有这行，「我那些定时任务还活着吗」就得切回 Hermes 才能答。
+    # 只读是刻意的：往 Hermes cron 写要过它的 gateway，两套调度器共管一个
+    # jobs 文件，结果只会是任务重复触发或者永不触发。
+    - id: hermes-bridge-hermes-data
+      name: dsh-hermes-bridge/hermes-data
+      config: {}
+
+    - id: hermes-bridge-settings
+      name: dsh-hermes-bridge/settings
+      config:
+        vikingEndpoint: http://127.0.0.1:1933

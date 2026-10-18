@@ -1,0 +1,80 @@
+{
+  "name": "dsh-hermes-bridge",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "把 Hermes 的 persona、长期记忆、skills、MCP 服务器与 OpenViking 接进 DeepSeek Harness —— 每个功能是一个可独立启停的行",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "hermes",
+    "bundle"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Loki-kiki/dsh-hermes-bridge.git"
+  },
+  "homepage": "https://github.com/Loki-kiki/dsh-hermes-bridge#readme",
+  "bugs": {
+    "url": "https://github.com/Loki-kiki/dsh-hermes-bridge/issues"
+  },
+  "main": "./lib/index.js",
+  "icon": "./icon.svg",
+  "exports": {
+    ".": "./lib/index.js",
+    "./persona": "./lib/persona.js",
+    "./memory": "./lib/memory.js",
+    "./skills": "./lib/skills.js",
+    "./mcp": "./lib/mcp.js",
+    "./mcp-sync": "./lib/mcp-sync.js",
+    "./preview": "./lib/preview.js",
+    "./package.json": "./package.json",
+    "./viking": "./lib/viking.js",
+    "./settings": "./lib/settings.js",
+    "./client": "./client.js",
+    "./memory-write": "./lib/memory-write.js",
+    "./hermes-data": "./lib/hermes-data.js",
+    "./icon": "./icon.svg",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "bin": {
+    "dsh-hermes-bridge": "./bin/hermes-bridge.mjs"
+  },
+  "files": [
+    "lib",
+    "bin",
+    "docs",
+    "locale/*.json",
+    "icon.svg",
+    "client.js",
+    "cordis.patch.yml",
+    "README.md",
+    "README_EN.md"
+  ],
+  "engines": {
+    "node": "^22.19 || >=24"
+  },
+  "dependencies": {
+    "yaml": "^2.5.0"
+  },
+  "scripts": {
+    "test": "node test/splice.mjs && node test/memory-store.mjs && node test/schema.mjs && node test/settings.mjs",
+    "test:live": "node test/hermes-data.mjs && node test/mount-tools.mjs",
+    "test:icon": "node docs/images/verify-icon.mjs",
+    "test:meta": "node docs/images/verify-meta.mjs"
+  },
+  "devDependencies": {
+    "sharp": "^0.34.4"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": []
+    }
+  }
+}
